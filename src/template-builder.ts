@@ -56,7 +56,7 @@ function generatePrimitiveValue(field: PrimitiveField): string {
   return value;
 }
 
-function generateFieldValue(field: UnconditionalField): string {
+function generateFieldValue(field: TemplateField): string {
   switch (field.type) {
     case "string":
     case "raw":
@@ -71,34 +71,14 @@ function generateFieldValue(field: UnconditionalField): string {
     }
     case "string_array":
       return `"[" ++ ${field.expr}.map(|${field.loopVar}| stringify(${field.value}).escape_json()).join(",") ++ "]"`;
+    case "conditional":
+      return `if(${field.condition}, ${generateFieldValue(field.field)}, "null")`;
   }
 }
 
 function generateFieldEntry(name: string, field: TemplateField): string {
   const escapedName = escapeTemplateString(name);
-
-  switch (field.type) {
-    case "string":
-      return `"\\"${escapedName}\\": " ++ ${generatePrimitiveValue(field)}`;
-    case "raw":
-      return `"\\"${escapedName}\\": " ++ ${generatePrimitiveValue(field)}`;
-    case "number":
-      return `"\\"${escapedName}\\": " ++ ${generatePrimitiveValue(field)}`;
-    case "boolean":
-      return `"\\"${escapedName}\\": " ++ ${generatePrimitiveValue(field)}`;
-    case "dict": {
-      const inner = generateFields(field.contents);
-      return `"\\"${escapedName}\\": {" ++ ${inner} ++ "}"`;
-    }
-    case "array": {
-      const inner = generateFields(field.contents, field.loopVar);
-      return `"\\"${escapedName}\\": [" ++ ${field.expr}.map(|${field.loopVar}| "{" ++ ${inner} ++ "}").join(",") ++ "]"`;
-    }
-    case "string_array":
-      return `"\\"${escapedName}\\": [" ++ ${field.expr}.map(|${field.loopVar}| stringify(${field.value}).escape_json()).join(",") ++ "]"`;
-    case "conditional":
-      return `"\\"${escapedName}\\": " ++ if(${field.condition}, ${generateFieldValue(field.field)}, "null")`;
-  }
+  return `"\\"${escapedName}\\": " ++ ${generateFieldValue(field)}`;
 }
 
 function applyPrefix(field: TemplateField, prefix: string): TemplateField {

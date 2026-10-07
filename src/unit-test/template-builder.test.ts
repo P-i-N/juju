@@ -70,7 +70,7 @@ describe("TemplateBuilder Test Suite", () => {
     const result = generateTemplate(fields);
     assert.strictEqual(
       result,
-      `"{" ++ "\\"author\\": {" ++ "\\"email\\": " ++ stringify(author.email()).escape_json() ++ "," ++ "\\"name\\": " ++ author.name() ++ "}" ++ "}\\n"`,
+      `"{" ++ "\\"author\\": " ++ "{" ++ "\\"email\\": " ++ stringify(author.email()).escape_json() ++ "," ++ "\\"name\\": " ++ author.name() ++ "}" ++ "}\\n"`,
     );
   });
 
@@ -88,7 +88,7 @@ describe("TemplateBuilder Test Suite", () => {
     const result = generateTemplate(fields);
     assert.strictEqual(
       result,
-      `"{" ++ "\\"files\\": [" ++ self.diff().files().map(|x| "{" ++ "\\"path\\": " ++ stringify(x.path()).escape_json() ++ "}").join(",") ++ "]" ++ "}\\n"`,
+      `"{" ++ "\\"files\\": " ++ "[" ++ self.diff().files().map(|x| "{" ++ "\\"path\\": " ++ stringify(x.path()).escape_json() ++ "}").join(",") ++ "]" ++ "}\\n"`,
     );
   });
 
@@ -106,7 +106,7 @@ describe("TemplateBuilder Test Suite", () => {
     const result = generateTemplate(fields);
     assert.strictEqual(
       result,
-      `"{" ++ "\\"parents\\": [" ++ parents.map(|p| "{" ++ "\\"id\\": " ++ stringify(p.change_id()).escape_json() ++ "}").join(",") ++ "]" ++ "}\\n"`,
+      `"{" ++ "\\"parents\\": " ++ "[" ++ parents.map(|p| "{" ++ "\\"id\\": " ++ stringify(p.change_id()).escape_json() ++ "}").join(",") ++ "]" ++ "}\\n"`,
     );
   });
 
@@ -122,7 +122,7 @@ describe("TemplateBuilder Test Suite", () => {
     const result = generateTemplate(fields);
     assert.strictEqual(
       result,
-      `"{" ++ "\\"tags\\": [" ++ tags.map(|t| stringify(t.name()).escape_json()).join(",") ++ "]" ++ "}\\n"`,
+      `"{" ++ "\\"tags\\": " ++ "[" ++ tags.map(|t| stringify(t.name()).escape_json()).join(",") ++ "]" ++ "}\\n"`,
     );
   });
 
@@ -157,7 +157,7 @@ describe("TemplateBuilder Test Suite", () => {
     const result = generateTemplate(fields);
     assert.strictEqual(
       result,
-      `"{" ++ "\\"author\\": {" ++ "\\"email\\": " ++ stringify(author.email()).escape_json() ++ "," ++ "\\"name\\": " ++ stringify(author.name()).escape_json() ++ "}" ++ "," ++ "\\"change_id\\": " ++ stringify(change_id).escape_json() ++ "," ++ "\\"empty\\": " ++ if(self.empty(), "true", "false") ++ "}\\n"`,
+      `"{" ++ "\\"author\\": " ++ "{" ++ "\\"email\\": " ++ stringify(author.email()).escape_json() ++ "," ++ "\\"name\\": " ++ stringify(author.name()).escape_json() ++ "}" ++ "," ++ "\\"change_id\\": " ++ stringify(change_id).escape_json() ++ "," ++ "\\"empty\\": " ++ if(self.empty(), "true", "false") ++ "}\\n"`,
     );
   });
 
@@ -198,7 +198,7 @@ describe("TemplateBuilder Test Suite", () => {
   it("CONFLICTED_FILES_TEMPLATE emits only the conflicted_files array", () => {
     assert.strictEqual(
       CONFLICTED_FILES_TEMPLATE,
-      `"{" ++ "\\"conflicted_files\\": [" ++ self.conflicted_files().map(|f| stringify(f.path().display()).escape_json()).join(",") ++ "]" ++ "}\\n"`,
+      `"{" ++ "\\"conflicted_files\\": " ++ "[" ++ self.conflicted_files().map(|f| stringify(f.path().display()).escape_json()).join(",") ++ "]" ++ "}\\n"`,
     );
   });
 
@@ -318,8 +318,8 @@ describe("TemplateBuilder Test Suite", () => {
 
   it("buildSnapshotLogTemplate emits unconditional diff data when files are shown for all changes", () => {
     const template = buildSnapshotLogTemplate({ includeFilesForAll: true });
-    assert.ok(template.includes(`"\\"diff_files\\": [" ++ self.diff().files().map(`));
-    assert.ok(template.includes(`"\\"conflicted_files\\": [" ++ self.conflicted_files().map(`));
+    assert.ok(template.includes(`"\\"diff_files\\": " ++ "[" ++ self.diff().files().map(`));
+    assert.ok(template.includes(`"\\"conflicted_files\\": " ++ "[" ++ self.conflicted_files().map(`));
     assert.ok(template.includes(`"\\"tracked_files\\": " ++ if(self.current_working_copy(), "[" ++ self.files().map(`));
   });
 });
