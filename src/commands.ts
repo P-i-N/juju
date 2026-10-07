@@ -778,7 +778,7 @@ export function registerInitCommands(state: ExtensionState): void {
           return foundStatus;
         });
       } else if (scm.parentResourceGroups.includes(resourceGroup)) {
-        const show = scm.parentShowResults.get(resourceGroup.id);
+        const show = scm.parentFiles.get(resourceGroup.id);
         if (!show) {
           throw new Error("No current parent change show result found for the resource group");
         }

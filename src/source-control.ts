@@ -19,7 +19,8 @@ import { JJFileSystemProvider } from "./file-system-provider";
 import { getConfigArgs, getJJPath } from "./config";
 import { collectProcessOutput, spawnJJ, CancelledError } from "./process";
 import { extensionDir } from "./config";
-import { JJRepository } from "./repository";
+import { JJRepository, type ChangedSnapshot, type GraphQuery, type RepositorySnapshot } from "./repository";
+import { statusFromSnapshot, type ChangeFiles, type SnapshotStatus } from "./snapshot-status";
 import { StaleWorkingCopyError } from "./errors";
 import type {
   ChangeId,
@@ -76,6 +77,8 @@ async function checkJJVersion(jjFilepath: string): Promise<JJVersion | undefined
   return version;
 }
 
+export type RepoUpdate = { operationId?: string; snapshot?: ChangedSnapshot; stale?: boolean };
+
 export class WorkspaceSourceControlManager {
   private repoInfos: Map<
     string,
@@ -97,14 +100,11 @@ export class WorkspaceSourceControlManager {
   private errorSourceControl: vscode.SourceControl | undefined;
   private errorResourceGroup: vscode.SourceControlResourceGroup | undefined;
 
-  private _onDidRepoUpdate = new vscode.EventEmitter<{
-    repoSCM: RepositorySourceControlManager;
-    operationId?: string;
-  }>();
-  readonly onDidRepoUpdate: vscode.Event<{
-    repoSCM: RepositorySourceControlManager;
-    operationId?: string;
-  }> = this._onDidRepoUpdate.event;
+  graphQueryProvider: ((repositoryRoot: string) => GraphQuery | undefined) | undefined;
+
+  private _onDidRepoUpdate = new vscode.EventEmitter<{ repoSCM: RepositorySourceControlManager } & RepoUpdate>();
+  readonly onDidRepoUpdate: vscode.Event<{ repoSCM: RepositorySourceControlManager } & RepoUpdate> =
+    this._onDidRepoUpdate.event;
 
   constructor(private decorationProvider: JJDecorationProvider) {
     this.fileSystemProvider = new JJFileSystemProvider(this);
@@ -278,10 +278,11 @@ export class WorkspaceSourceControlManager {
         jjPath.filepath,
         jjConfigArgs,
         jjVersion,
+        () => this.graphQueryProvider?.(repoRoot),
       );
       repoSCM.onDidUpdate(
         (e) => {
-          this._onDidRepoUpdate.fire({ repoSCM, operationId: e?.operationId });
+          this._onDidRepoUpdate.fire({ repoSCM, ...e });
         },
         undefined,
         repoSCM.subscriptions,
@@ -455,15 +456,15 @@ class RepositorySourceControlManager {
   forceRefreshPending = false;
   private cancellationTokenSource = new vscode.CancellationTokenSource();
 
-  private _onDidUpdate = new vscode.EventEmitter<{ operationId?: string }>();
-  readonly onDidUpdate: vscode.Event<{ operationId?: string }> = this._onDidUpdate.event;
+  private _onDidUpdate = new vscode.EventEmitter<RepoUpdate>();
+  readonly onDidUpdate: vscode.Event<RepoUpdate> = this._onDidUpdate.event;
 
   operationId: string | undefined;
   fileStatusesByChange: Map<string, FileStatus[]> = new Map();
   conflictedFilesByChange: Map<string, Set<NormalizedPath>> = new Map();
   trackedFiles: Set<NormalizedPath> = new Set();
   status: RepositoryStatus | undefined;
-  parentShowResults: Map<string, Show> = new Map();
+  parentFiles: Map<string, ChangeFiles> = new Map();
   private watcherDebounceTimer: NodeJS.Timeout | undefined;
   private watcherSubscriptions: {
     dispose(): unknown;
@@ -476,6 +477,7 @@ class RepositorySourceControlManager {
     jjPath: string,
     jjConfigArgs: string[],
     jjVersion: JJVersion | undefined,
+    private readonly getGraphQuery: () => GraphQuery | undefined,
   ) {
     this.repository = new JJRepository(repositoryRoot, jjPath, jjConfigArgs, jjVersion);
 
@@ -648,9 +650,12 @@ class RepositorySourceControlManager {
    * This should never be called concurrently.
    */
   async checkForUpdatesUnsafe(token: vscode.CancellationToken, forceRefresh: ForceRefresh) {
-    let latestOperationId: string;
+    let snapshot: RepositorySnapshot;
     try {
-      latestOperationId = await this.repository.getLatestOperationId(false, token);
+      snapshot = await this.repository.loadSnapshot(
+        { previousOperationId: this.operationId, force: forceRefresh === "force", graph: this.getGraphQuery() },
+        token,
+      );
       if (token.isCancellationRequested) {
         return;
       }
@@ -668,44 +673,50 @@ class RepositorySourceControlManager {
           await this.checkForUpdatesUnsafe(token, forceRefresh);
           return;
         }
-        // Need to update the graph view to show the stale state.
-        this._onDidUpdate.fire({});
+        this._onDidUpdate.fire({ stale: true });
       }
       throw error;
     }
-    if (token.isCancellationRequested) {
+    if (!snapshot.changed) {
       return;
     }
-    if (this.operationId !== latestOperationId || forceRefresh === "force") {
-      const status = await this.repository.getStatus(false, token, latestOperationId);
 
-      if (token.isCancellationRequested) {
-        return;
-      }
-      await this.updateState(status, token, latestOperationId);
-      if (token.isCancellationRequested) {
-        return;
-      }
-      this.render();
-      // Commit the operation id only after the refresh completed so a cancelled refresh (e.g.
-      // watchdog aborted) retries the same operation on the next poll.
-      this.operationId = latestOperationId;
+    const snapshotStatus = statusFromSnapshot(
+      [...snapshot.entries, ...snapshot.missingParentEntries],
+      this.repositoryRoot,
+      this.status?.untrackedFiles ?? [],
+    );
+    this.updateState(snapshotStatus);
+    this.render();
+    // Commit the operation id only after the refresh completed so a cancelled refresh (e.g.
+    // watchdog aborted) retries the same operation on the next poll.
+    this.operationId = snapshot.operationId;
+    this._onDidUpdate.fire({ operationId: snapshot.operationId, snapshot });
 
-      this._onDidUpdate.fire({ operationId: latestOperationId });
-    }
+    await this.refreshUntrackedFiles(token);
   }
 
-  async updateState(status: RepositoryStatus, token: vscode.CancellationToken, operationId?: string) {
-    const newTrackedFiles = new Set<NormalizedPath>();
-    const newParentShowResults = new Map<string, Show>();
-    const newFileStatusesByChange = new Map<string, FileStatus[]>([["@", status.fileStatuses]]);
-    const newConflictedFilesByChange = new Map<string, Set<NormalizedPath>>([["@", status.conflictedFiles]]);
-
-    const trackedFilesList = await this.repository.fileList(token, operationId);
-    if (token.isCancellationRequested) {
+  private async refreshUntrackedFiles(token: vscode.CancellationToken) {
+    let untrackedFiles: FileStatus[];
+    try {
+      untrackedFiles = await this.repository.getUntrackedFiles(token);
+    } catch (error) {
+      if (!(error instanceof CancelledError) && !(error instanceof StaleWorkingCopyError)) {
+        logger.warn(`Failed to list untracked files: ${error instanceof Error ? error.message : String(error)}`);
+      }
       return;
     }
-    for (const t of trackedFilesList) {
+    if (token.isCancellationRequested || !this.status) {
+      return;
+    }
+    this.status = { ...this.status, untrackedFiles };
+    this.repository.statusCache = this.status;
+    this.render();
+  }
+
+  updateState({ status, parentFiles, trackedFiles }: SnapshotStatus) {
+    const newTrackedFiles = new Set<NormalizedPath>();
+    for (const t of trackedFiles) {
       const pathParts = t.split(path.sep);
       let currentPath = this.repositoryRoot + path.sep;
       for (const p of pathParts) {
@@ -715,27 +726,18 @@ class RepositorySourceControlManager {
       }
     }
 
-    const parentShowPromises = status.parentChanges.map(async (parentChange) => {
-      const rev = parentChange.changeId.changeId;
-      const showResult = await this.repository.show(rev, token, operationId);
-      return { changeId: parentChange.changeId.changeId, showResult };
-    });
-
-    const parentShowResultsArray = await Promise.all(parentShowPromises);
-    if (token.isCancellationRequested) {
-      return;
-    }
-
-    for (const { changeId, showResult } of parentShowResultsArray) {
-      newParentShowResults.set(changeId, showResult);
-      newFileStatusesByChange.set(changeId, showResult.fileStatuses);
-      newConflictedFilesByChange.set(changeId, showResult.conflictedFiles);
+    const newFileStatusesByChange = new Map<string, FileStatus[]>([["@", status.fileStatuses]]);
+    const newConflictedFilesByChange = new Map<string, Set<NormalizedPath>>([["@", status.conflictedFiles]]);
+    for (const [changeId, files] of parentFiles) {
+      newFileStatusesByChange.set(changeId, files.fileStatuses);
+      newConflictedFilesByChange.set(changeId, files.conflictedFiles);
     }
 
     this.status = status;
+    this.repository.statusCache = status;
     this.fileStatusesByChange = newFileStatusesByChange;
     this.conflictedFilesByChange = newConflictedFilesByChange;
-    this.parentShowResults = newParentShowResults;
+    this.parentFiles = parentFiles;
     this.trackedFiles = newTrackedFiles;
   }
 
@@ -811,7 +813,7 @@ class RepositorySourceControlManager {
         );
       }
 
-      const showResult = this.parentShowResults.get(parentChange.changeId.changeId);
+      const showResult = this.parentFiles.get(parentChange.changeId.changeId);
       if (showResult) {
         parentChangeResourceGroup.resourceStates = buildResourceStates(showResult.fileStatuses, {
           changeId: parentChange.changeId.changeId,
