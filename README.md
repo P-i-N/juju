@@ -1,8 +1,8 @@
-# Jujutsu X
+# Juju
 
 ![logo](images/logo-small.png)
 
-**Jujutsu X** provides a native VS Code experience for the [Jujutsu (jj)](https://github.com/jj-vcs/jj) version control
+**Juju** provides a native VS Code experience for the [Jujutsu (jj)](https://github.com/jj-vcs/jj) version control
 system.
 
 ## 🚀 Key features
@@ -38,9 +38,9 @@ system.
 - Compare two selected changes with a diff or interdiff
 - Create merge changes by selecting multiple changes and then pressing the "+" button
 - Drag & drop changes onto other changes
-- Optionally show each commit's changed files in the graph (like `jj log -s`) behind an expand arrow next to the commit.
-  Click a file to open its diff, or drag it onto another change to move its changes there (⚠️ experimental, enable with
-  `jjx.showChangedFiles`)
+- Show each commit's changed files in the graph (like `jj log -s`) behind an expand arrow next to the commit. Click a
+  file to open its diff, or drag it onto another change to move its changes there (⚠️ experimental, disable with
+  `juju.showChangedFiles`)
 - Keyboard shortcuts:
   - `ArrowUp` / `ArrowDown`: Move the selection by one change
   - `Shift` + `ArrowUp` / `ArrowDown`: Extend the selection by one change, like a `Shift` + click
@@ -55,7 +55,7 @@ system.
   - `t`: Create a tag on the last selected change
   - `s`: Split the last selected change
   - `ArrowRight` / `ArrowLeft`: Expand/collapse the changed files of the selected change(s) (with
-    `jjx.showChangedFiles`)
+    `juju.showChangedFiles`)
 
 ### 🖱️ Context menu
 
@@ -146,7 +146,7 @@ system.
 - Show workspace labels in the graph view  
   ![workspaces](images/workspaces.png)
 - Right-click a workspace pill to forget the workspace (with or without deleting its directory) or copy its path
-- Automatically update stale workspaces (can be disabled with `jjx.autoUpdateStaleWorkspace`, in which case the user
+- Automatically update stale workspaces (can be disabled with `juju.autoUpdateStaleWorkspace`, in which case the user
   will be prompted to update a stale workspace)
 
 ### 🔄 Operation management
@@ -157,7 +157,7 @@ system.
 
 ## 📋 Prerequisites
 
-- Ensure `jj` is installed and available in your system's `$PATH`, or configure a custom path using the `jjx.jjPath`
+- Ensure `jj` is installed and available in your system's `$PATH`, or configure a custom path using the `juju.jjPath`
   setting
 - Ensure `jj` is of a recent version (>=0.38.0)
 
@@ -165,42 +165,42 @@ system.
 
 The following settings can be configured in VS Code's settings:
 
-| Setting                             | Default     | Description                                                                                                                                                    |
-| ----------------------------------- | ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `jjx.autoSwitchRepository`          | `true`      | Automatically switch the repository shown in the JJ Graph and Operation Log views to the repository containing the active editor                               |
-| `jjx.autoUpdateStaleWorkspace`      | `true`      | Automatically run `jj workspace update-stale` when the current workspace is stale                                                                              |
-| `jjx.baseWebURL`                    | `""`        | Base URL for the 'Copy URL' feature (e.g., `https://github.com/user/repo`). Overrides `git_web_url()` when set                                                 |
-| `jjx.changeDoubleClickAction`       | `"new"`     | Action when double-clicking a change in the graph view: `"edit"` (jj edit) or `"new"` (jj new)                                                                 |
-| `jjx.commandTimeout`                | `null`      | Global timeout in milliseconds for all jj commands. If not set, per-command defaults will be used                                                              |
-| `jjx.commitAction`                  | `"commit"`  | Action when pressing Ctrl+Enter in source control: `"commit"` (jj commit) or `"new"` (jj new). Ctrl+Shift+Enter does the same but also opens an editor         |
-| `jjx.elideImmutableCommits`         | `true`      | Hide chains of immutable commits between relevant commits in the graph view                                                                                    |
-| `jjx.elidedVisibleImmutableParents` | `1`         | Number of immutable parent commits to show in the log when eliding commits                                                                                     |
-| `jjx.enableAnnotations`             | `true`      | Enables in-line blame annotations                                                                                                                              |
-| `jjx.fileClickAction`               | `"diff"`    | Action when clicking a file: `"diff"` (compare to parent), `"at-revision"` (open at clicked revision), or `"working-copy"` (open in working copy)              |
-| `jjx.graphStyle`                    | `"compact"` | Display style for commits: `"full"` shows all details, `"compact"` shows single line                                                                           |
-| `jjx.jjPath`                        | `""`        | Path to the jj executable. If not set, your PATH and common locations will be searched                                                                         |
-| `jjx.logLimit`                      | `500`       | Maximum number of commits shown in the graph view                                                                                                              |
-| `jjx.pollIntervalSeconds`           | `30`        | Interval in seconds between repository polls. Set to 0 to disable                                                                                              |
-| `jjx.showChangedFiles`              | `false`     | ⚠️ Experimental: Show an expandable list of changed files for each commit in the graph (similar to `jj log -s`). Clicking a file opens a diff at that revision |
-| `jjx.showTooltips`                  | `true`      | Show tooltips when hovering over commits in the graph view                                                                                                     |
+| Setting                              | Default     | Description                                                                                                                                                    |
+| ------------------------------------ | ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `juju.autoSwitchRepository`          | `true`      | Automatically switch the repository shown in the JJ Graph and Operation Log views to the repository containing the active editor                               |
+| `juju.autoUpdateStaleWorkspace`      | `true`      | Automatically run `jj workspace update-stale` when the current workspace is stale                                                                              |
+| `juju.baseWebURL`                    | `""`        | Base URL for the 'Copy URL' feature (e.g., `https://github.com/user/repo`). Overrides `git_web_url()` when set                                                 |
+| `juju.changeDoubleClickAction`       | `"new"`     | Action when double-clicking a change in the graph view: `"edit"` (jj edit) or `"new"` (jj new)                                                                 |
+| `juju.commandTimeout`                | `null`      | Global timeout in milliseconds for all jj commands. If not set, per-command defaults will be used                                                              |
+| `juju.commitAction`                  | `"commit"`  | Action when pressing Ctrl+Enter in source control: `"commit"` (jj commit) or `"new"` (jj new). Ctrl+Shift+Enter does the same but also opens an editor         |
+| `juju.elideImmutableCommits`         | `true`      | Hide chains of immutable commits between relevant commits in the graph view                                                                                    |
+| `juju.elidedVisibleImmutableParents` | `1`         | Number of immutable parent commits to show in the log when eliding commits                                                                                     |
+| `juju.enableAnnotations`             | `true`      | Enables in-line blame annotations                                                                                                                              |
+| `juju.fileClickAction`               | `"diff"`    | Action when clicking a file: `"diff"` (compare to parent), `"at-revision"` (open at clicked revision), or `"working-copy"` (open in working copy)              |
+| `juju.graphStyle`                    | `"compact"` | Display style for commits: `"full"` shows all details, `"compact"` shows single line                                                                           |
+| `juju.jjPath`                        | `""`        | Path to the jj executable. If not set, your PATH and common locations will be searched                                                                         |
+| `juju.logLimit`                      | `500`       | Maximum number of commits shown in the graph view                                                                                                              |
+| `juju.pollIntervalSeconds`           | `30`        | Interval in seconds between repository polls. Set to 0 to disable                                                                                              |
+| `juju.showChangedFiles`              | `true`      | ⚠️ Experimental: Show an expandable list of changed files for each commit in the graph (similar to `jj log -s`). Clicking a file opens a diff at that revision |
+| `juju.showTooltips`                  | `true`      | Show tooltips when hovering over commits in the graph view                                                                                                     |
 
 ## 🐛 Known issues
 
-If you encounter any problems, please [report them on GitHub](https://github.com/Christoph-D/jjx/issues/)!
+If you encounter any problems, please [report them on GitHub](https://github.com/P-i-N/juju/issues/)!
 
 ## 🔧 Troubleshooting
 
 ### Double modification annotations ("M, M") in file explorer
 
 If you see annotations like "M, M" next to files, this is caused by VS Code's built-in Git extension running alongside
-JJX. To disable Git, disable `git.enabled` in your VS Code settings.
+Juju. To disable Git, disable `git.enabled` in your VS Code settings.
 
 ### Slow diff
 
 Some file diffs or merges load very slowly. This is a known VS Code issue where VS Code's internal diff algorithm takes
 an unusually long time for certain diffs.
 
-You can verify that it's VS Code and not Jujutsu X by opening the same diff with `code --diff <file-a> <file-b>`.
+You can verify that it's VS Code and not Juju by opening the same diff with `code --diff <file-a> <file-b>`.
 
 Workarounds:
 
@@ -211,12 +211,13 @@ Workarounds:
 
 If you experience performance issues, try these steps:
 
-- Disable `jjx.enableAnnotations`, blame annotations are expensive to compute for large repos
-- Lower `jjx.logLimit` to show fewer commits in the graph
+- Disable `juju.enableAnnotations`, blame annotations are expensive to compute for large repos
+- Lower `juju.logLimit` to show fewer commits in the graph
 
 ## 🙏 Acknowledgements
 
-Jujutsu X is based on [Jujutsu Kaizen](https://github.com/keanemind/jjk).
+Juju is a fork of [Jujutsu X](https://github.com/Christoph-D/jjx), which is based on
+[Jujutsu Kaizen](https://github.com/keanemind/jjk).
 
 ## 📝 License
 

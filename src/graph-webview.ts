@@ -137,7 +137,7 @@ export class JJGraphWebview implements vscode.WebviewViewProvider {
       switch (message.command) {
         case "editChange":
           try {
-            const config = vscode.workspace.getConfiguration("jjx");
+            const config = vscode.workspace.getConfiguration("juju");
             const changeDoubleClickAction = config.get<string>("changeDoubleClickAction") || "edit";
             if (changeDoubleClickAction === "new") {
               await repo.new(undefined, [message.changeId]);
@@ -940,7 +940,7 @@ export class JJGraphWebview implements vscode.WebviewViewProvider {
   }
 
   private getEffectiveEliding(): boolean {
-    const configValue = vscode.workspace.getConfiguration("jjx").get<boolean>("elideImmutableCommits") ?? true;
+    const configValue = vscode.workspace.getConfiguration("juju").get<boolean>("elideImmutableCommits") ?? true;
     return this.elideOverride ?? configValue;
   }
 
@@ -957,7 +957,7 @@ export class JJGraphWebview implements vscode.WebviewViewProvider {
     if (!this.panel || this.repository?.repositoryRoot !== repositoryRoot) {
       return undefined;
     }
-    const config = vscode.workspace.getConfiguration("jjx");
+    const config = vscode.workspace.getConfiguration("juju");
     return {
       revset: getLogRevset(),
       limit: config.get<number>("logLimit") ?? DEFAULT_LOG_LIMIT,
@@ -998,9 +998,9 @@ export class JJGraphWebview implements vscode.WebviewViewProvider {
     try {
       const operationId = snapshot.operationId;
       const rawEntries = snapshot.entries;
-      const config = vscode.workspace.getConfiguration("jjx");
+      const config = vscode.workspace.getConfiguration("juju");
       const graphStyle = config.get<string>("graphStyle") || "full";
-      const showChangedFiles = config.get<boolean>("showChangedFiles") ?? false;
+      const showChangedFiles = config.get<boolean>("showChangedFiles") ?? true;
       const elideImmutableCommits = this.getEffectiveEliding();
       const { edges, visibleIds, reachableVisibleFrom } = classifyEdges(rawEntries, {
         elideImmutableCommits,

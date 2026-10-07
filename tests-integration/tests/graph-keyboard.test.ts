@@ -420,7 +420,7 @@ test("letter shortcuts act on the single selected change", async ({ graphFrame, 
 });
 
 test.describe("double click action set to edit", () => {
-  test.use({ customSettings: { "jjx.changeDoubleClickAction": "edit" } });
+  test.use({ customSettings: { "juju.changeDoubleClickAction": "edit" } });
 
   test("Enter edits the selected change", async ({ graphFrame, testRepo, workbox }) => {
     await testRepo.commitFile("a.txt", "content a", "A");

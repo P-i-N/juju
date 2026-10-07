@@ -31,7 +31,7 @@ export function registerAnnotations(state: ExtensionState): void {
     if (!repository) {
       return;
     }
-    const config = vscode.workspace.getConfiguration("jjx", toWorkspaceUri(repository.repositoryRoot));
+    const config = vscode.workspace.getConfiguration("juju", toWorkspaceUri(repository.repositoryRoot));
     if (!config.get("enableAnnotations")) {
       editor.setDecorations(annotationDecoration, []);
       return;
@@ -101,7 +101,7 @@ export function registerAnnotations(state: ExtensionState): void {
     if (!repository) {
       return;
     }
-    const config = vscode.workspace.getConfiguration("jjx", toWorkspaceUri(repository.repositoryRoot));
+    const config = vscode.workspace.getConfiguration("juju", toWorkspaceUri(repository.repositoryRoot));
     if (!config.get("enableAnnotations")) {
       annotateInfo = undefined;
       return;
@@ -148,7 +148,7 @@ export function registerAnnotations(state: ExtensionState): void {
   );
   context.subscriptions.push(
     vscode.workspace.onDidChangeConfiguration(async (e) => {
-      if (e.affectsConfiguration("jjx.enableAnnotations")) {
+      if (e.affectsConfiguration("juju.enableAnnotations")) {
         const editor = vscode.window.activeTextEditor;
         if (editor) {
           lastUniqueChangeIds = "";

@@ -128,7 +128,7 @@ test("duplicate before another commit via drag and drop", async ({ graphFrame, t
 });
 
 test.describe("with immutable ancestors visible", () => {
-  test.use({ customSettings: { "jjx.elideImmutableCommits": false } });
+  test.use({ customSettings: { "juju.elideImmutableCommits": false } });
 
   test("duplicate before an immutable commit prompts for confirmation", async ({ graphFrame, testRepo, workbox }) => {
     await testRepo.commitFile("a.txt", "content a", "A");

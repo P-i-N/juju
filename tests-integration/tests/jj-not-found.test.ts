@@ -11,7 +11,7 @@ const test = base.extend({
       const tempDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "jjx-test-"));
       const repoPath = path.join(tempDir, "repo");
       const repo = await newTestRepo(repoPath);
-      await repo.writeFile(".vscode/settings.json", JSON.stringify({ "jjx.jjPath": "/nonexistent/jj" }));
+      await repo.writeFile(".vscode/settings.json", JSON.stringify({ "juju.jjPath": "/nonexistent/jj" }));
       await use(repo);
       await fs.promises.rm(tempDir, { recursive: true, force: true });
     },

@@ -1606,7 +1606,7 @@ export class JJRepository {
 
   async getCommitUrl(changeId: FullChangeId): Promise<string | null> {
     try {
-      const config = vscode.workspace.getConfiguration("jjx", toWorkspaceUri(this.repositoryRoot));
+      const config = vscode.workspace.getConfiguration("juju", toWorkspaceUri(this.repositoryRoot));
       const baseWebURL = config.get<string>("baseWebURL") ?? "";
 
       if (baseWebURL) {
@@ -1942,7 +1942,7 @@ export class JJRepository {
   }
 
   async tryAutoUpdateStale(token?: vscode.CancellationToken): Promise<boolean> {
-    const config = vscode.workspace.getConfiguration("jjx", toWorkspaceUri(this.repositoryRoot));
+    const config = vscode.workspace.getConfiguration("juju", toWorkspaceUri(this.repositoryRoot));
     if (!config.get<boolean>("autoUpdateStaleWorkspace")) {
       return false;
     }

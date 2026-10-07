@@ -125,7 +125,7 @@ const testJJ038 = test.extend({
   customSettings:
     // eslint-disable-next-line no-empty-pattern
     async ({}, use) => {
-      await use({ "jjx.jjPath": JJ_038_PATH });
+      await use({ "juju.jjPath": JJ_038_PATH });
     },
   testRepo: [
     // eslint-disable-next-line no-empty-pattern

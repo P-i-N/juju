@@ -53,5 +53,5 @@ export const DIVERGENCE_BACKOFF = {
   MAX_RETRIES: 5,
 } as const;
 
-// Also update the default for jjx.logLimit in package.json when changing this value.
+// Also update the default for juju.logLimit in package.json when changing this value.
 export const DEFAULT_LOG_LIMIT = 500 as const;

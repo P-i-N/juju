@@ -198,7 +198,7 @@ test("toggle diff view switches between file and diff editors", async ({ graphFr
 });
 
 test.describe("with the at-revision file click action", () => {
-  test.use({ customSettings: { "jjx.fileClickAction": "at-revision" } });
+  test.use({ customSettings: { "juju.fileClickAction": "at-revision" } });
 
   test("clicking a parent file opens it at that revision with a short change ID tab title", async ({
     graphFrame,

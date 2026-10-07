@@ -7,18 +7,20 @@ function fileRows(graphFrame: Frame, changeId: string, filePath?: string) {
   return graphFrame.locator(`#nodes > [data-role="changed-file"][data-file-of^="${changeId}/"]${pathFilter}`);
 }
 
-test("showChangedFiles off by default hides changed-files UI", async ({ graphFrame, testRepo }) => {
-  await testRepo.commitFile("a.txt", "content a", "commit A");
-  await testRepo.commitFile("b.txt", "content b", "commit B");
+test.describe("with showChangedFiles disabled", () => {
+  test.use({ customSettings: { "juju.showChangedFiles": false } });
 
-  await expect(graphFrame.locator("#nodes > div").first()).toBeVisible();
-  await expect(graphFrame.locator('[data-role="changed-file"]')).toHaveCount(0);
-  await expect(graphFrame.locator('[data-role="files-toggle"]')).toHaveCount(0);
+  test("changed-files UI is hidden", async ({ graphFrame, testRepo }) => {
+    await testRepo.commitFile("a.txt", "content a", "commit A");
+    await testRepo.commitFile("b.txt", "content b", "commit B");
+
+    await expect(graphFrame.locator("#nodes > div").first()).toBeVisible();
+    await expect(graphFrame.locator('[data-role="changed-file"]')).toHaveCount(0);
+    await expect(graphFrame.locator('[data-role="files-toggle"]')).toHaveCount(0);
+  });
 });
 
-test.describe("with showChangedFiles enabled", () => {
-  test.use({ customSettings: { "jjx.showChangedFiles": true } });
-
+test.describe("with showChangedFiles enabled by default", () => {
   test("files are collapsed until the toggle is clicked", async ({ graphFrame, testRepo }) => {
     const changeA = await testRepo.commitFile("a.txt", "content a", "commit A");
     const changeB = await testRepo.commitFile("b.txt", "content b", "commit B");

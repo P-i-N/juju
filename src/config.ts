@@ -17,14 +17,14 @@ export function getConfigArgs(extensionDir: string): string[] {
 }
 
 /**
- * If jjx.commandTimeout is set, returns that value.
+ * If juju.commandTimeout is set, returns that value.
  * Otherwise, returns the provided default timeout, or 30 seconds if no default is provided.
  */
 export function getCommandTimeout(repositoryRoot: string, defaultTimeout: number | undefined): number {
   if (defaultTimeout === 0) {
     return 0;
   }
-  const config = vscode.workspace.getConfiguration("jjx", toWorkspaceUri(repositoryRoot));
+  const config = vscode.workspace.getConfiguration("juju", toWorkspaceUri(repositoryRoot));
   const configuredTimeout = config.get<number | null>("commandTimeout");
   if (configuredTimeout !== null && configuredTimeout !== undefined) {
     return configuredTimeout;
@@ -40,7 +40,7 @@ export async function getJJPath(
   workspaceFolder: string,
 ): Promise<{ filepath: string; source: "configured" | "path" | "common" }> {
   const config = vscode.workspace.getConfiguration(
-    "jjx",
+    "juju",
     workspaceFolder !== undefined ? toWorkspaceUri(workspaceFolder) : undefined,
   );
   const configuredPath = config.get<string>("jjPath");
@@ -49,7 +49,7 @@ export async function getJJPath(
     if (await which(configuredPath, { nothrow: true })) {
       return { filepath: configuredPath, source: "configured" };
     } else {
-      throw new Error(`Configured jjx.jjPath is not an executable file: ${configuredPath}`);
+      throw new Error(`Configured juju.jjPath is not an executable file: ${configuredPath}`);
     }
   }
 
@@ -87,6 +87,6 @@ export function getLogRevset(): string {
 }
 
 export function getElidedVisibleImmutableParents(repositoryRoot: string): number {
-  const config = vscode.workspace.getConfiguration("jjx", toWorkspaceUri(repositoryRoot));
+  const config = vscode.workspace.getConfiguration("juju", toWorkspaceUri(repositoryRoot));
   return config.get<number>("elidedVisibleImmutableParents") ?? 1;
 }

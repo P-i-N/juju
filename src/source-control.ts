@@ -207,7 +207,7 @@ export class WorkspaceSourceControlManager {
         } else {
           if (
             e instanceof Error &&
-            (e.message.includes("jj CLI not found") || e.message.includes("jjx.jjPath is not an executable"))
+            (e.message.includes("jj CLI not found") || e.message.includes("juju.jjPath is not an executable"))
           ) {
             anyBinaryNotFound = true;
           }
@@ -773,7 +773,7 @@ class RepositorySourceControlManager {
       throw new Error("Cannot render source control without a current working copy change.");
     }
 
-    const config = vscode.workspace.getConfiguration("jjx", vscode.Uri.file(this.repositoryRoot));
+    const config = vscode.workspace.getConfiguration("juju", vscode.Uri.file(this.repositoryRoot));
     const fileClickAction = config.get<"diff" | "at-revision" | "working-copy">("fileClickAction") || "diff";
 
     this.workingCopyResourceGroup.label = RepositorySourceControlManager.getLabel(

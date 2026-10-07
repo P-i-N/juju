@@ -111,7 +111,7 @@ test("commit change via SCM input box", async ({ graphFrame, testRepo, workbox }
 });
 
 test.describe("commitAction = new", () => {
-  test.use({ customSettings: { "jjx.commitAction": "new", "jjx.graphStyle": "full" } });
+  test.use({ customSettings: { "juju.commitAction": "new", "juju.graphStyle": "full" } });
 
   test("create new change via SCM input box", async ({ graphFrame, testRepo, workbox }) => {
     await expect(graphFrame.locator('[data-mode="compact"]')).toHaveCount(0);

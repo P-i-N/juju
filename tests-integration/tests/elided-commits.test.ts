@@ -18,17 +18,17 @@ test("elided commits appear when ancestors are immutable and respect settings", 
   });
 
   await test.step("elision can be disabled via settings", async () => {
-    await testRepo.writeFile(".vscode/settings.json", '{"jjx.elideImmutableCommits": false}');
+    await testRepo.writeFile(".vscode/settings.json", '{"juju.elideImmutableCommits": false}');
     await expect(nodes).toHaveCount(4);
     await expect(elidedNode).toBeHidden();
   });
 
   await test.step("elidedVisibleImmutableParents controls how many elided commits stay visible", async () => {
-    await testRepo.writeFile(".vscode/settings.json", '{"jjx.elidedVisibleImmutableParents": 2}');
+    await testRepo.writeFile(".vscode/settings.json", '{"juju.elidedVisibleImmutableParents": 2}');
     await expect(nodes).toHaveCount(4);
     await expect(elidedNode).toBeVisible();
 
-    await testRepo.writeFile(".vscode/settings.json", '{"jjx.elidedVisibleImmutableParents": 3}');
+    await testRepo.writeFile(".vscode/settings.json", '{"juju.elidedVisibleImmutableParents": 3}');
     await expect(nodes).toHaveCount(4);
     await expect(elidedNode).toBeHidden();
   });

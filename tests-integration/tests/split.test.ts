@@ -903,7 +903,7 @@ async function gitDiff(testRepo: TestRepo, changeId: string): Promise<string> {
 }
 
 test.describe("with immutable commits visible", () => {
-  test.use({ customSettings: { "jjx.elideImmutableCommits": false } });
+  test.use({ customSettings: { "juju.elideImmutableCommits": false } });
 
   test("splitting an immutable commit prompts for confirmation", async ({ graphFrame, testRepo, workbox }) => {
     test.slow();

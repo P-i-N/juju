@@ -3,7 +3,7 @@ import fs from "fs";
 import { test, expect, TestRepo, clickPillMenuItem, canonicalPath } from "./base-test";
 
 test.describe("auto-update disabled", () => {
-  test.use({ customSettings: { "jjx.autoUpdateStaleWorkspace": false } });
+  test.use({ customSettings: { "juju.autoUpdateStaleWorkspace": false } });
 
   test("workspace pills and stale workspace status appear in the graph view", async ({ graphFrame, testRepo }) => {
     await testRepo.commit("initial commit");

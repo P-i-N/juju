@@ -9,7 +9,7 @@ import type { ForceRefresh } from "./source-control";
 import { StaleWorkingCopyError } from "./errors";
 
 function syncSelectedRepoToActiveEditor(state: ExtensionState) {
-  if (!vscode.workspace.getConfiguration("jjx").get<boolean>("autoSwitchRepository")) {
+  if (!vscode.workspace.getConfiguration("juju").get<boolean>("autoSwitchRepository")) {
     return;
   }
   const uri = vscode.window.activeTextEditor?.document.uri;
@@ -172,7 +172,7 @@ export function createPolling(
     if (state.workspaceSCM.repoSCMs.length === 0) {
       pollTimeoutId = setTimeout(scheduleNextPoll, 5000);
     } else {
-      const pollIntervalSeconds = vscode.workspace.getConfiguration("jjx").get<number>("pollIntervalSeconds");
+      const pollIntervalSeconds = vscode.workspace.getConfiguration("juju").get<number>("pollIntervalSeconds");
       if (pollIntervalSeconds !== undefined && pollIntervalSeconds > 0) {
         pollTimeoutId = setTimeout(scheduleNextPoll, pollIntervalSeconds * 1000);
       }
@@ -216,32 +216,32 @@ export function createPolling(
           await checkRepos(affectedFolders);
         }
       }
-      if (e.affectsConfiguration("jjx.commitAction")) {
+      if (e.affectsConfiguration("juju.commitAction")) {
         for (const repoSCM of state.workspaceSCM.repoSCMs) {
           repoSCM.updatePlaceholderText();
         }
       }
-      if (e.affectsConfiguration("jjx.autoSwitchRepository")) {
+      if (e.affectsConfiguration("juju.autoSwitchRepository")) {
         syncSelectedRepoToActiveEditor(state);
       }
-      if (e.affectsConfiguration("jjx.fileClickAction")) {
+      if (e.affectsConfiguration("juju.fileClickAction")) {
         for (const repoSCM of state.workspaceSCM.repoSCMs) {
           repoSCM.render();
         }
       }
       if (
-        e.affectsConfiguration("jjx.graphStyle") ||
-        e.affectsConfiguration("jjx.logLimit") ||
-        e.affectsConfiguration("jjx.elideImmutableCommits") ||
-        e.affectsConfiguration("jjx.elidedVisibleImmutableParents") ||
-        e.affectsConfiguration("jjx.showTooltips") ||
-        e.affectsConfiguration("jjx.showChangedFiles")
+        e.affectsConfiguration("juju.graphStyle") ||
+        e.affectsConfiguration("juju.logLimit") ||
+        e.affectsConfiguration("juju.elideImmutableCommits") ||
+        e.affectsConfiguration("juju.elidedVisibleImmutableParents") ||
+        e.affectsConfiguration("juju.showTooltips") ||
+        e.affectsConfiguration("juju.showChangedFiles")
       ) {
         if (state.graphWebview) {
-          if (e.affectsConfiguration("jjx.elideImmutableCommits")) {
+          if (e.affectsConfiguration("juju.elideImmutableCommits")) {
             await state.graphWebview.resetElideOverride();
           }
-          if (e.affectsConfiguration("jjx.logLimit")) {
+          if (e.affectsConfiguration("juju.logLimit")) {
             await state.graphWebview.refresh();
           } else {
             await state.graphWebview.rerender();

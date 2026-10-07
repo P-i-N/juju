@@ -394,7 +394,7 @@ async function createChange(
   if (!repository) {
     throw new Error("Repository not found");
   }
-  const config = vscode.workspace.getConfiguration("jjx");
+  const config = vscode.workspace.getConfiguration("juju");
   const commitAction = config.get<string>("commitAction") || "commit";
   const message = sourceControl.inputBox.value.trim();
   if (commitAction === "commit") {

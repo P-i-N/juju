@@ -184,8 +184,8 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
         "chat.disableAIFeatures": true,
         "diffEditor.renderSideBySide": true,
         "diffEditor.renderSideBySideInlineBreakpoint": 50,
-        "jjx.showTooltips": false, // tooltips interfere with mouse positioning
-        "jjx.pollIntervalSeconds": 5,
+        "juju.showTooltips": false, // tooltips interfere with mouse positioning
+        "juju.pollIntervalSeconds": 5,
         "window.dialogStyle": "custom",
         "window.autoDetectColorScheme": false,
         ...customSettings,

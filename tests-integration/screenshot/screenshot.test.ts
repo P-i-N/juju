@@ -26,7 +26,7 @@ async function initializeSettings(userDataDir: string, zoomLevel: number) {
   await addSettings(userDataDir, {
     "window.zoomLevel": zoomLevel,
     "workbench.colorTheme": "Dark+",
-    "jjx.graphStyle": "compact",
+    "juju.graphStyle": "compact",
   });
 }
 
@@ -125,7 +125,7 @@ test("take screenshot of jj graph for readme", async ({ userDataDir, graphFrame,
 
   await addSettings(userDataDir, {
     "workbench.colorTheme": "Dark+",
-    "jjx.graphStyle": "full",
+    "juju.graphStyle": "full",
   });
   await expect(graphFrame.locator('[data-mode="compact"]')).toHaveCount(0);
   await screenshot(workbox, "full-view.png", {
@@ -135,7 +135,7 @@ test("take screenshot of jj graph for readme", async ({ userDataDir, graphFrame,
     height: 500,
   });
 
-  await addSettings(userDataDir, { "jjx.graphStyle": "compact" });
+  await addSettings(userDataDir, { "juju.graphStyle": "compact" });
   await expect(graphFrame.locator('[data-mode="compact"]').first()).toBeVisible();
 
   const secondCommit = nodes.nth(1);

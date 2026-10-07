@@ -60,13 +60,13 @@ test("blame annotations appear in the editor", async ({ graphFrame, testRepo, wo
     expect(await hasAnnotation(editor, firstCommitId.slice(0, 4))).toBe(true);
   }).toPass();
 
-  await testRepo.writeFile(".vscode/settings.json", '{"jjx.enableAnnotations": false}');
+  await testRepo.writeFile(".vscode/settings.json", '{"juju.enableAnnotations": false}');
 
   await expect(async () => {
     expect(await hasAnnotation(editor, "First commit")).toBe(false);
   }).toPass();
 
-  await testRepo.writeFile(".vscode/settings.json", '{"jjx.enableAnnotations": true}');
+  await testRepo.writeFile(".vscode/settings.json", '{"juju.enableAnnotations": true}');
 
   await expect(async () => {
     expect(await hasAnnotation(editor, "First commit")).toBe(true);
