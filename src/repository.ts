@@ -110,7 +110,7 @@ export type {
   SplitFileEntry,
 };
 
-export type GraphQuery = { revset: string; limit: number; includeFiles: boolean };
+export type GraphQuery = { revset: string; limit: number };
 export type SnapshotRequest = {
   previousOperationId: string | undefined;
   force: boolean;
@@ -429,15 +429,14 @@ export class JJRepository {
       return { changed: false, operationId };
     }
 
-    const includeFiles = request.graph?.includeFiles ?? false;
-    const template = buildSnapshotLogTemplate({ includeFilesForAll: includeFiles });
+    const template = buildSnapshotLogTemplate();
     const revsetArgs = request.graph
       ? ["-r", `(${request.graph.revset}) | @ | parents(@)`, "-n", request.graph.limit.toString()]
       : ["-r", "@ | parents(@)"];
     const colocatedPromise = this.isColocated(operationId);
     const logOutput = await this.jjCommandRead(["log", ...revsetArgs, "-T", template], { token }, operationId);
     const colocated = await colocatedPromise;
-    const entries = hideStaleGitRemoteRefs(this.parseLogEntries(logOutput.toString(), includeFiles), colocated);
+    const entries = hideStaleGitRemoteRefs(this.parseLogEntries(logOutput.toString(), false), colocated);
 
     let fallbackEntries: LogEntry[] = [];
     if (needsWorkingCopyFallback(entries)) {
@@ -450,7 +449,7 @@ export class JJRepository {
               operationId,
             )
           ).toString(),
-          includeFiles,
+          false,
         ),
         colocated,
       );
@@ -1098,6 +1097,14 @@ export class JJRepository {
       await this.jjCommandRead(["log", "-r", rev, "-n", limit.toString(), "-T", template], undefined, operationId)
     ).toString();
     return this.parseLogEntries(output, opts?.includeFiles ?? false);
+  }
+
+  /**
+   * Fetches the changed files of the commit with the given full commit id, like `jj log -s`.
+   */
+  async getChangedFiles(commitId: string): Promise<FileStatus[]> {
+    const [entry] = await this.log(commitId, 1, { includeFiles: true });
+    return entry?.fileStatuses ?? [];
   }
 
   /**

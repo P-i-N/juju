@@ -1,5 +1,12 @@
 import { useSignal, useSignalEffect } from "@preact/signals";
-import { currentChanges, currentGraph, changeIdHorizontalOffset, connectedHighlight } from "../signals";
+import {
+  currentChanges,
+  currentGraph,
+  changeIdHorizontalOffset,
+  connectedHighlight,
+  expandedFileLists,
+  changedFilesCache,
+} from "../signals";
 import type { FullChangeId } from "../../../graph-protocol";
 import { getLaneColor } from "../svg-utils";
 import { buildEdgeSegments, buildVisiblePathDs, type PathSegment } from "../connection-segments";
@@ -20,6 +27,8 @@ export function ConnectionLines() {
   useSignalEffect(() => {
     void currentChanges.value;
     void changeIdHorizontalOffset.value;
+    void expandedFileLists.value;
+    void changedFilesCache.value;
 
     const graph = currentGraph.value;
     if (!graph?.edges) {

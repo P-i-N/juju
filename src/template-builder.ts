@@ -364,20 +364,15 @@ export function buildDetailsTemplate(): string {
 
 const WORKING_COPY_OR_PARENT = `self.current_working_copy() || self.contained_in("parents(@)")`;
 
-export function buildSnapshotLogTemplate(opts: { includeFilesForAll: boolean }): string {
-  const diffFields: TemplateFields = opts.includeFilesForAll
-    ? DIFF_FILES_FIELD
-    : {
-        diff_files: { type: "conditional", condition: WORKING_COPY_OR_PARENT, field: DIFF_FILES_FIELD.diff_files },
-        conflicted_files: {
-          type: "conditional",
-          condition: WORKING_COPY_OR_PARENT,
-          field: DIFF_FILES_FIELD.conflicted_files,
-        },
-      };
+export function buildSnapshotLogTemplate(): string {
   return generateTemplate({
     ...LOG_ENTRY_FIELDS,
-    ...diffFields,
+    diff_files: { type: "conditional", condition: WORKING_COPY_OR_PARENT, field: DIFF_FILES_FIELD.diff_files },
+    conflicted_files: {
+      type: "conditional",
+      condition: WORKING_COPY_OR_PARENT,
+      field: DIFF_FILES_FIELD.conflicted_files,
+    },
     tracked_files: {
       type: "conditional",
       condition: "self.current_working_copy()",

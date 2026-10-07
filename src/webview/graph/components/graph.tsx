@@ -8,7 +8,6 @@ import {
   offsetWidth,
   changeIdHorizontalOffset,
   scrollY,
-  showChangedFiles,
 } from "../signals";
 import { ChangeNodeRow } from "./change-node";
 import { NodeCircles } from "./node-circle";
@@ -42,7 +41,6 @@ export function Graph() {
   const changes = currentChanges.value;
   const graph = currentGraph.value;
   const style = graphStyle.value;
-  const showingFiles = showChangedFiles.value;
   const compact = style === "compact";
 
   return (
@@ -70,7 +68,6 @@ export function Graph() {
               nodeData={nodeData ?? null}
               changeIdRef={index === 0 ? firstChangeIdRef : undefined}
               compact={compact}
-              showingFiles={showingFiles}
             />
           );
         })}

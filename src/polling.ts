@@ -241,7 +241,7 @@ export function createPolling(
           if (e.affectsConfiguration("jjx.elideImmutableCommits")) {
             await state.graphWebview.resetElideOverride();
           }
-          if (e.affectsConfiguration("jjx.logLimit") || e.affectsConfiguration("jjx.showChangedFiles")) {
+          if (e.affectsConfiguration("jjx.logLimit")) {
             await state.graphWebview.refresh();
           } else {
             await state.graphWebview.rerender();

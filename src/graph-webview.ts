@@ -16,10 +16,11 @@ import {
   shouldOpenWorkingCopyRightSide,
   toForwardSlashes,
 } from "./utils";
-import type { ChangeId, FullChangeId, RealPath } from "./types";
+import type { ChangeId, FullChangeId } from "./types";
 import { assignLanes } from "./lane-assigner";
 import {
   getUniqueId,
+  type ChangedFile,
   type ChangeNode,
   type RegularChangeNode,
   type WebviewToExtensionMessage,
@@ -596,6 +597,15 @@ export class JJGraphWebview implements vscode.WebviewViewProvider {
             repo.squashRetryImmutable({ fromRevs: message.changeIds, toRev: message.targetChangeId }),
           );
           break;
+        case "moveFileChanges":
+          await this.withRefresh("move file changes", () =>
+            repo.squashRetryImmutable({
+              fromRevs: [message.fromChangeId],
+              toRev: message.toChangeId,
+              filepaths: message.paths.map((p) => joinRepositoryPath(repo.repositoryRoot, p)),
+            }),
+          );
+          break;
         case "duplicateOnto":
         case "duplicateAfter":
         case "duplicateBefore": {
@@ -630,6 +640,23 @@ export class JJGraphWebview implements vscode.WebviewViewProvider {
             // Silently ignore - tooltip simply won't show diff stats
           }
           break;
+        case "fetchChangedFiles": {
+          let files: ChangedFile[] | null = null;
+          try {
+            files = (await repo.getChangedFiles(message.commitId)).map((f) => ({
+              type: f.type,
+              path: toForwardSlashes(repositoryRelativePath(repo.repositoryRoot, f.path)),
+              ...(f.renamedFrom
+                ? { renamedFrom: toForwardSlashes(repositoryRelativePath(repo.repositoryRoot, f.renamedFrom)) }
+                : {}),
+              conflict: f.isConflict ?? f.type === "X",
+            }));
+          } catch (error: unknown) {
+            logger.warn(`Failed to load changed files: ${error instanceof Error ? error.message : String(error)}`);
+          }
+          this.postMessageToWebview({ command: "changedFilesResponse", commitId: message.commitId, files });
+          break;
+        }
         case "openFileDiff": {
           const { changeId, path: relPath, status, renamedFrom } = message;
           const absPath = joinRepositoryPath(repo.repositoryRoot, relPath);
@@ -934,7 +961,6 @@ export class JJGraphWebview implements vscode.WebviewViewProvider {
     return {
       revset: getLogRevset(),
       limit: config.get<number>("logLimit") ?? DEFAULT_LOG_LIMIT,
-      includeFiles: config.get<boolean>("showChangedFiles") ?? false,
     };
   }
 
@@ -981,11 +1007,7 @@ export class JJGraphWebview implements vscode.WebviewViewProvider {
         elidedVisibleImmutableParents: getElidedVisibleImmutableParents(repository.repositoryRoot),
       });
       const entriesWithSynthetics = insertSyntheticNodes(rawEntries, edges, visibleIds, reachableVisibleFrom);
-      const { changes, maxPrefixLength, offsetWidth } = parseJJLogJson(
-        entriesWithSynthetics,
-        graphStyle,
-        repository.repositoryRoot,
-      );
+      const { changes, maxPrefixLength, offsetWidth } = parseJJLogJson(entriesWithSynthetics, graphStyle);
       this.currentChanges = changes;
       this.changesById = new Map(
         changes.filter((c): c is RegularChangeNode => c.branchType !== "~").map((c) => [c.id.changeId, c]),
@@ -1143,7 +1165,6 @@ function description(entry: LogEntry) {
 function parseJJLogJson(
   entries: LogEntry[],
   style: string = "full",
-  repositoryRoot?: RealPath,
 ): { changes: ChangeNode[]; maxPrefixLength: number; offsetWidth: number } {
   const nonSyntheticEntries = entries.filter((e) => !getUniqueEntryId(e).startsWith("~"));
 
@@ -1218,18 +1239,6 @@ function parseJJLogJson(
 
     const uniqueParentIds = entry.parents.map((p: ParentRef) => fullChangeId(p.change_id, p.change_offset));
 
-    const changedFiles =
-      repositoryRoot !== undefined && entry.fileStatuses
-        ? entry.fileStatuses.map((f) => ({
-            type: f.type,
-            path: toForwardSlashes(repositoryRelativePath(repositoryRoot, f.path)),
-            ...(f.renamedFrom
-              ? { renamedFrom: toForwardSlashes(repositoryRelativePath(repositoryRoot, f.renamedFrom)) }
-              : {}),
-            conflict: f.isConflict ?? f.type === "X",
-          }))
-        : undefined;
-
     return {
       id: {
         changeId: uniqueChangeId,
@@ -1256,7 +1265,6 @@ function parseJJLogJson(
       mine: entry.mine,
       conflict: entry.conflict,
       isEmpty: entry.empty,
-      ...(changedFiles ? { changedFiles } : {}),
     };
   });
 

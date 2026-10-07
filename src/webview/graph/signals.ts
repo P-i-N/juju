@@ -42,6 +42,16 @@ export const graphStyle = signal("full");
 export const changeDoubleClickAction = signal("new");
 export const showTooltips = signal(true);
 export const showChangedFiles = signal(false);
+export const expandedFileLists = signal<Set<FullChangeId>>(new Set());
+export type ChangedFilesState = ChangedFile[] | "loading" | "error";
+// Changed files keyed by commit id: a commit id pins the content, so a loaded file list never goes stale.
+export const changedFilesCache = signal<Map<string, ChangedFilesState>>(new Map());
+export interface FileRowRef {
+  changeId: FullChangeId;
+  path: string;
+}
+export const selectedFile = signal<FileRowRef | null>(null);
+export const dragFile = signal<(FileRowRef & { renamedFrom?: string }) | null>(null);
 export const supportsTagTracking = signal(false);
 export const currentWorkspace = signal<string | null>(null);
 export const scrollY = signal(0);
@@ -137,6 +147,18 @@ interface FileContextMenuState {
 }
 
 export const fileContextMenu = signal<FileContextMenuState | null>(null);
+
+export function setFileListsExpanded(changeIds: Iterable<FullChangeId>, expanded: boolean) {
+  const next = new Set(expandedFileLists.value);
+  for (const changeId of changeIds) {
+    if (expanded) {
+      next.add(changeId);
+    } else {
+      next.delete(changeId);
+    }
+  }
+  expandedFileLists.value = next;
+}
 
 export const pendingGraphUpdate = signal<PendingGraphUpdate | null>(null);
 

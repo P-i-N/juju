@@ -19,7 +19,13 @@ import {
   postMessage,
   showTooltips,
   showChangedFiles,
+  expandedFileLists,
+  changedFilesCache,
+  setFileListsExpanded,
+  selectedFile,
+  dragFile,
   dragBookmarkName,
+  dragStartChangeId,
   pillContextMenu,
   currentWorkspace,
   remoteRefContextMenu,
@@ -39,7 +45,13 @@ import {
 } from "../signals";
 import { computeSelection } from "../selection";
 import { SWIMLANE_WIDTH, CHANGE_ID_RIGHT_PADDING, rootChangeId } from "../types";
-import { getUniqueId, type LaneNode, type ChangeNode, type RegularChangeNode } from "../../../graph-protocol";
+import {
+  getUniqueId,
+  type ChangedFile,
+  type LaneNode,
+  type ChangeNode,
+  type RegularChangeNode,
+} from "../../../graph-protocol";
 import { abbreviateName, cx, escapeInvisibleChars } from "../utils";
 
 function shouldShowTooltip(change: ChangeNode): change is RegularChangeNode {
@@ -48,7 +60,7 @@ function shouldShowTooltip(change: ChangeNode): change is RegularChangeNode {
 
 function isOverTooltipTarget(e: MouseEvent): boolean {
   const target = e.target as HTMLElement;
-  return !!target.closest?.('[data-role="text-content"]');
+  return !!target.closest?.('[data-role="text-content"]') && !target.closest?.('[data-role="files-toggle"]');
 }
 
 interface Props {
@@ -57,15 +69,23 @@ interface Props {
   nodeData: LaneNode | null;
   changeIdRef?: RefObject<HTMLDivElement>;
   compact: boolean;
-  showingFiles: boolean;
 }
 
-export function ChangeNodeRow({ change, index, nodeData, changeIdRef, compact, showingFiles }: Props) {
+function canHaveChangedFiles(change: RegularChangeNode): boolean {
+  return !change.elided && (!change.isEmpty || change.conflict);
+}
+
+export function ChangeNodeRow({ change, index, nodeData, changeIdRef, compact }: Props) {
   const dragProps = useDragDrop(change);
   const { startHoverTimers, clearHoverTimers, clearHideTimer, scheduleHideTooltip } = createTooltipTimers();
   const isElided = change.branchType === "~";
   // Per-row computed signal to re-render only rows whose selection changed.
   const isSelected = useComputed(() => change.branchType !== "~" && selectedNodes.value.has(change.id.changeId));
+  const filesExpanded = useComputed(
+    () => showChangedFiles.value && change.branchType !== "~" && expandedFileLists.value.has(change.id.changeId),
+  );
+  const filesState =
+    filesExpanded.value && change.branchType !== "~" ? changedFilesCache.value.get(change.commitId) : undefined;
   const graphW = SWIMLANE_WIDTH * (nodeData?.numLanesActiveVisually ?? 0);
 
   const handleClick = (e: MouseEvent) => {
@@ -75,6 +95,7 @@ export function ChangeNodeRow({ change, index, nodeData, changeIdRef, compact, s
     if (isElided && !e.shiftKey) {
       return;
     }
+    selectedFile.value = null;
 
     const outcome = computeSelection(currentChanges.value, index, selectionAnchorId.value, selectedNodes.value, {
       shiftKey: e.shiftKey,
@@ -154,46 +175,60 @@ export function ChangeNodeRow({ change, index, nodeData, changeIdRef, compact, s
     scheduleHideTooltip();
   };
 
-  const modeClasses = cx(compact && styles.compactMode, showingFiles && styles.showingFilesMode);
+  const modeClasses = cx(compact && styles.compactMode);
 
   const changeUniqueId = getUniqueId(change);
 
   return (
-    <ChangeNodeClass
-      changeId={changeUniqueId}
-      currentWorkingCopy={change.branchType !== "~" && change.currentWorkingCopy}
-      isElided={isElided}
-      selected={isSelected}
-      modeClasses={modeClasses}
-      data-change-id={changeUniqueId}
-      onClick={handleClick}
-      onDblClick={handleDoubleClick}
-      onContextMenu={handleContextMenu}
-      onMouseEnter={handleMouseEnter}
-      onMouseMove={handleMouseMove}
-      onMouseLeave={handleMouseLeave}
-      {...dragProps}
-    >
-      <div class={styles.changeIdLeft} data-role="change-id" ref={changeIdRef}>
-        {change.branchType !== "~" && (
-          <>
-            {change.conflict && (
-              <span class={styles.conflictIndicator} data-role="conflict-indicator">
-                ✗
-              </span>
-            )}
-            <span class={styles.changeIdPrefix}>{change.id.changeIdPrefix}</span>
-            <span class={styles.changeIdSuffix}>{change.id.changeIdSuffix}</span>
-            {change.id.changeOffset && <span class={styles.changeIdOffset}>/{change.id.changeOffset}</span>}
-          </>
+    <>
+      <ChangeNodeClass
+        changeId={changeUniqueId}
+        currentWorkingCopy={change.branchType !== "~" && change.currentWorkingCopy}
+        isElided={isElided}
+        selected={isSelected}
+        modeClasses={modeClasses}
+        data-change-id={changeUniqueId}
+        onClick={handleClick}
+        onDblClick={handleDoubleClick}
+        onContextMenu={handleContextMenu}
+        onMouseEnter={handleMouseEnter}
+        onMouseMove={handleMouseMove}
+        onMouseLeave={handleMouseLeave}
+        {...dragProps}
+      >
+        <div class={styles.changeIdLeft} data-role="change-id" ref={changeIdRef}>
+          {change.branchType !== "~" && (
+            <>
+              {change.conflict && (
+                <span class={styles.conflictIndicator} data-role="conflict-indicator">
+                  ✗
+                </span>
+              )}
+              <span class={styles.changeIdPrefix}>{change.id.changeIdPrefix}</span>
+              <span class={styles.changeIdSuffix}>{change.id.changeIdSuffix}</span>
+              {change.id.changeOffset && <span class={styles.changeIdOffset}>/{change.id.changeOffset}</span>}
+            </>
+          )}
+        </div>
+        {change.branchType === "~" ? (
+          <ElidedTextContent graphW={graphW} />
+        ) : (
+          <MemoizedChangeNodeTextContent
+            change={change}
+            graphW={graphW}
+            filesExpanded={filesExpanded.value}
+            loadingFiles={filesState === "loading"}
+          />
         )}
-      </div>
-      {change.branchType === "~" ? (
-        <ElidedTextContent graphW={graphW} />
-      ) : (
-        <MemoizedChangeNodeTextContent change={change} graphW={graphW} />
+      </ChangeNodeClass>
+      {change.branchType !== "~" && Array.isArray(filesState) && filesState.length > 0 && (
+        <MemoizedChangedFileRows change={change} files={filesState} graphW={graphW} />
       )}
-    </ChangeNodeClass>
+      {change.branchType !== "~" && Array.isArray(filesState) && filesState.length === 0 && (
+        <FileRowMessage graphW={graphW}>No changed files</FileRowMessage>
+      )}
+      {filesState === "error" && <FileRowMessage graphW={graphW}>Failed to load changed files</FileRowMessage>}
+    </>
   );
 }
 
@@ -251,9 +286,13 @@ const ElidedTextContent = memo(function ElidedTextContent({ graphW }: { graphW: 
 const MemoizedChangeNodeTextContent = memo(function ChangeNodeTextContent({
   change,
   graphW,
+  filesExpanded,
+  loadingFiles,
 }: {
   change: RegularChangeNode;
   graphW: number;
+  filesExpanded: boolean;
+  loadingFiles: boolean;
 }) {
   const localBookmarkNames = new Set(change.localBookmarks.map((b) => b.name));
   const localTagNames = new Set(change.localTags.map((t) => t.name));
@@ -269,6 +308,7 @@ const MemoizedChangeNodeTextContent = memo(function ChangeNodeTextContent({
       }}
     >
       <div>
+        {showChangedFiles.value && <FilesToggle change={change} expanded={filesExpanded} loading={loadingFiles} />}
         {change.workingCopies?.map((wc) => (
           <WorkspacePill
             key={wc}
@@ -531,54 +571,157 @@ const MemoizedChangeNodeTextContent = memo(function ChangeNodeTextContent({
         )}
       </div>
       {style !== "compact" && <div class={styles.description}>{change.description}</div>}
-      {showChangedFiles.value && !change.elided && change.changedFiles && change.changedFiles.length > 0 && (
-        <ChangedFileList change={change} />
-      )}
     </div>
   );
 });
 
-const ChangedFileList = memo(function ChangedFileList({ change }: { change: RegularChangeNode }) {
+function FilesToggle({
+  change,
+  expanded,
+  loading,
+}: {
+  change: RegularChangeNode;
+  expanded: boolean;
+  loading: boolean;
+}) {
+  if (!canHaveChangedFiles(change)) {
+    return <span class={styles.filesToggle} />;
+  }
   return (
-    <div class={styles.changedFiles}>
-      {change.changedFiles!.map((f) => (
-        <div
-          key={f.path}
-          title="Open diff"
-          class={styles.changedFile}
-          data-role="changed-file"
-          data-path={f.path}
-          data-status={f.type.toLowerCase()}
-          data-conflict={f.conflict ? "" : undefined}
-          onClick={(e) => {
-            e.stopPropagation();
-            postMessage({
-              command: "openFileDiff",
-              changeId: change.id.changeId,
-              path: f.path,
-              status: f.type,
-              ...(f.renamedFrom ? { renamedFrom: f.renamedFrom } : {}),
-            });
-          }}
-          onContextMenu={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            closeAllMenus();
-            fileContextMenu.value = {
-              change,
-              file: f,
-              clientX: e.clientX,
-              clientY: e.clientY,
-            };
-          }}
-        >
-          <span class={styles.changedFileStatus}>
-            {f.type}
-            {f.conflict ? "!" : ""}
-          </span>
-          <span class={styles.changedFilePath}>{f.path}</span>
-        </div>
-      ))}
+    <span
+      class={cx(
+        styles.filesToggle,
+        "codicon",
+        loading ? "codicon-loading codicon-modifier-spin" : expanded ? "codicon-chevron-down" : "codicon-chevron-right",
+      )}
+      data-role="files-toggle"
+      role="button"
+      aria-expanded={expanded}
+      title={expanded ? "Hide Changed Files" : "Show Changed Files"}
+      onClick={(e) => {
+        e.stopPropagation();
+        setFileListsExpanded([change.id.changeId], !expanded);
+      }}
+      onDblClick={(e) => e.stopPropagation()}
+    />
+  );
+}
+
+function fileRowStyle(graphW: number) {
+  return {
+    "--graph-width": `${graphW}px`,
+    "--change-id-right-padding": `${CHANGE_ID_RIGHT_PADDING}px`,
+  };
+}
+
+function FileRowMessage({ graphW, children }: { graphW: number; children: preact.ComponentChildren }) {
+  return (
+    <div
+      class={cx(styles.fileRow, styles.fileRowMessage)}
+      data-role="changed-file-message"
+      style={fileRowStyle(graphW)}
+    >
+      {children}
     </div>
   );
+}
+
+const MemoizedChangedFileRows = memo(function ChangedFileRows({
+  change,
+  files,
+  graphW,
+}: {
+  change: RegularChangeNode;
+  files: ChangedFile[];
+  graphW: number;
+}) {
+  return (
+    <>
+      {files.map((f) => (
+        <FileRow key={f.path} change={change} file={f} graphW={graphW} />
+      ))}
+    </>
+  );
 });
+
+function FileRow({ change, file, graphW }: { change: RegularChangeNode; file: ChangedFile; graphW: number }) {
+  const selected = selectedFile.value?.changeId === change.id.changeId && selectedFile.value.path === file.path;
+  const separator = file.path.lastIndexOf("/");
+  const fileName = file.path.slice(separator + 1);
+  const directory = separator === -1 ? "" : file.path.slice(0, separator);
+  return (
+    <div
+      class={cx(styles.fileRow, selected && styles.selected)}
+      style={fileRowStyle(graphW)}
+      title="Open diff"
+      data-role="changed-file"
+      data-file-of={change.id.changeId}
+      data-path={file.path}
+      data-status={file.type.toLowerCase()}
+      data-conflict={file.conflict ? "" : undefined}
+      data-selected={selected ? "" : undefined}
+      draggable={change.id.changeId !== rootChangeId}
+      onClick={() => {
+        if (isDragging.value || justFinishedDrag.value) {
+          return;
+        }
+        selectedFile.value = { changeId: change.id.changeId, path: file.path };
+        postMessage({
+          command: "openFileDiff",
+          changeId: change.id.changeId,
+          path: file.path,
+          status: file.type,
+          ...(file.renamedFrom ? { renamedFrom: file.renamedFrom } : {}),
+        });
+      }}
+      onContextMenu={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        closeAllMenus();
+        fileContextMenu.value = {
+          change,
+          file,
+          clientX: e.clientX,
+          clientY: e.clientY,
+        };
+      }}
+      onDragStart={(e) => {
+        dragStartChangeId.value = null;
+        dragBookmarkName.value = null;
+        dragFile.value = {
+          changeId: change.id.changeId,
+          path: file.path,
+          ...(file.renamedFrom ? { renamedFrom: file.renamedFrom } : {}),
+        };
+        isDragging.value = true;
+        clearAllTooltipTimers();
+        tooltip.value = null;
+        e.dataTransfer!.setData("text/plain", file.path);
+        e.dataTransfer!.effectAllowed = "move";
+
+        const ghost = document.createElement("div");
+        ghost.className = dragGhostStyles.dragGhost;
+        ghost.textContent = file.path;
+        document.body.appendChild(ghost);
+        e.dataTransfer!.setDragImage(ghost, -15, 0);
+        setTimeout(() => ghost.remove(), 0);
+      }}
+      onDragEnd={() => {
+        isDragging.value = false;
+        dragFile.value = null;
+        dropTargetId.value = null;
+      }}
+    >
+      <span class={styles.fileName} data-role="file-name">
+        {fileName}
+      </span>
+      <span class={styles.fileDirectory} data-role="file-directory">
+        {directory}
+      </span>
+      <span class={styles.fileStatus} data-role="file-status">
+        {file.type}
+        {file.conflict ? "!" : ""}
+      </span>
+    </div>
+  );
+}

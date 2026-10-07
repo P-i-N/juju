@@ -308,18 +308,11 @@ describe("TemplateBuilder Test Suite", () => {
   });
 
   it("buildSnapshotLogTemplate limits diff data to @ and its parents and tracked files to @", () => {
-    const template = buildSnapshotLogTemplate({ includeFilesForAll: false });
+    const template = buildSnapshotLogTemplate();
     const condition = `self.current_working_copy() || self.contained_in("parents(@)")`;
     assert.ok(template.includes(`"\\"diff_files\\": " ++ if(${condition}, "[" ++ self.diff().files().map(`));
     assert.ok(template.includes(`"\\"conflicted_files\\": " ++ if(${condition}, "[" ++ self.conflicted_files().map(`));
     assert.ok(template.includes(`"\\"tracked_files\\": " ++ if(self.current_working_copy(), "[" ++ self.files().map(`));
     assert.ok(template.includes(`"\\"change_id\\": "`));
-  });
-
-  it("buildSnapshotLogTemplate emits unconditional diff data when files are shown for all changes", () => {
-    const template = buildSnapshotLogTemplate({ includeFilesForAll: true });
-    assert.ok(template.includes(`"\\"diff_files\\": " ++ "[" ++ self.diff().files().map(`));
-    assert.ok(template.includes(`"\\"conflicted_files\\": " ++ "[" ++ self.conflicted_files().map(`));
-    assert.ok(template.includes(`"\\"tracked_files\\": " ++ if(self.current_working_copy(), "[" ++ self.files().map(`));
   });
 });

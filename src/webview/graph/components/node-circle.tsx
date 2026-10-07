@@ -6,6 +6,8 @@ import {
   selectedNodes,
   hoveredChangeId,
   connectedHighlight,
+  expandedFileLists,
+  changedFilesCache,
 } from "../signals";
 import { CIRCLE_RADIUS } from "../types";
 import { getUniqueId, type ChangeNode, type LaneNode } from "../../../graph-protocol";
@@ -70,6 +72,8 @@ export function NodeCircles() {
   useSignalEffect(() => {
     void currentChanges.value;
     void changeIdHorizontalOffset.value;
+    void expandedFileLists.value;
+    void changedFilesCache.value;
 
     const graph = currentGraph.value;
     if (!graph) {

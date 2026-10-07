@@ -1,5 +1,11 @@
 import { test, expect, clickFileMenuItem, runCommand, canonicalPath } from "./base-test";
+import type { Frame } from "@playwright/test";
 import path from "path";
+
+function fileRows(graphFrame: Frame, changeId: string, filePath?: string) {
+  const pathFilter = filePath === undefined ? "" : `[data-path="${filePath}"]`;
+  return graphFrame.locator(`#nodes > [data-role="changed-file"][data-file-of^="${changeId}/"]${pathFilter}`);
+}
 
 test("showChangedFiles off by default hides changed-files UI", async ({ graphFrame, testRepo }) => {
   await testRepo.commitFile("a.txt", "content a", "commit A");
@@ -7,19 +13,111 @@ test("showChangedFiles off by default hides changed-files UI", async ({ graphFra
 
   await expect(graphFrame.locator("#nodes > div").first()).toBeVisible();
   await expect(graphFrame.locator('[data-role="changed-file"]')).toHaveCount(0);
+  await expect(graphFrame.locator('[data-role="files-toggle"]')).toHaveCount(0);
 });
 
 test.describe("with showChangedFiles enabled", () => {
   test.use({ customSettings: { "jjx.showChangedFiles": true } });
 
+  test("files are collapsed until the toggle is clicked", async ({ graphFrame, testRepo }) => {
+    const changeA = await testRepo.commitFile("a.txt", "content a", "commit A");
+    const changeB = await testRepo.commitFile("b.txt", "content b", "commit B");
+
+    const rowA = graphFrame.locator(`#nodes > div[data-change-id^="${changeA}/"]`);
+    const toggleA = rowA.locator('[data-role="files-toggle"]');
+    await expect(toggleA).toBeVisible();
+    await expect(toggleA).toHaveAttribute("aria-expanded", "false");
+    await expect(graphFrame.locator('[data-role="changed-file"]')).toHaveCount(0);
+
+    await toggleA.click();
+    await expect(toggleA).toHaveAttribute("aria-expanded", "true");
+    await expect(fileRows(graphFrame, changeA, "a.txt")).toBeVisible();
+    await expect(fileRows(graphFrame, changeB)).toHaveCount(0);
+    // Clicking the toggle must not select the change.
+    await expect(rowA).not.toHaveAttribute("data-selected", "");
+
+    await toggleA.click();
+    await expect(toggleA).toHaveAttribute("aria-expanded", "false");
+    await expect(graphFrame.locator('[data-role="changed-file"]')).toHaveCount(0);
+  });
+
+  test("ArrowRight and ArrowLeft expand and collapse the selected change", async ({ graphFrame, testRepo }) => {
+    const changeA = await testRepo.commitFile("a.txt", "content a", "commit A");
+
+    const rowA = graphFrame.locator(`#nodes > div[data-change-id^="${changeA}/"]`);
+    await rowA.click();
+    await expect(rowA).toHaveAttribute("data-selected", "");
+
+    await rowA.press("ArrowRight");
+    await expect(fileRows(graphFrame, changeA, "a.txt")).toBeVisible();
+
+    await rowA.press("ArrowLeft");
+    await expect(fileRows(graphFrame, changeA)).toHaveCount(0);
+  });
+
+  test("each changed file is its own selectable row", async ({ graphFrame, testRepo }) => {
+    await testRepo.writeFile("a.txt", "content a");
+    await testRepo.writeFile("b.txt", "content b");
+    const changeAB = await testRepo.commit("commit AB");
+
+    const row = graphFrame.locator(`#nodes > div[data-change-id^="${changeAB}/"]`);
+    await row.locator('[data-role="files-toggle"]').click();
+
+    const aFile = fileRows(graphFrame, changeAB, "a.txt");
+    const bFile = fileRows(graphFrame, changeAB, "b.txt");
+    await expect(aFile).toBeVisible();
+    await expect(bFile).toBeVisible();
+    await expect(aFile).toHaveAttribute("draggable", "true");
+    // Like the SCM view: the file name and the change type on the right.
+    await expect(aFile.locator('[data-role="file-name"]')).toHaveText("a.txt");
+    await expect(aFile.locator('[data-role="file-status"]')).toHaveText("A");
+
+    await aFile.click();
+    await expect(aFile).toHaveAttribute("data-selected", "");
+    await expect(bFile).not.toHaveAttribute("data-selected", "");
+
+    await bFile.click();
+    await expect(bFile).toHaveAttribute("data-selected", "");
+    await expect(aFile).not.toHaveAttribute("data-selected", "");
+
+    // Selecting a commit clears the file selection.
+    await row.click();
+    await expect(bFile).not.toHaveAttribute("data-selected", "");
+  });
+
+  test("dragging a file onto another change moves its changes there", async ({ graphFrame, testRepo }) => {
+    const target = await testRepo.commitFile("base.txt", "base", "target");
+    await testRepo.writeFile("a.txt", "content a");
+    await testRepo.writeFile("b.txt", "content b");
+    const source = await testRepo.commit("source");
+
+    await graphFrame.locator(`#nodes > div[data-change-id^="${source}/"] [data-role="files-toggle"]`).click();
+    await graphFrame.locator(`#nodes > div[data-change-id^="${target}/"] [data-role="files-toggle"]`).click();
+    await expect(fileRows(graphFrame, source, "a.txt")).toBeVisible();
+
+    await fileRows(graphFrame, source, "a.txt").dragTo(
+      graphFrame.locator(`#nodes > div[data-change-id^="${target}/"]`),
+    );
+
+    await expect(fileRows(graphFrame, target, "a.txt")).toBeVisible();
+    await expect(fileRows(graphFrame, source, "a.txt")).toHaveCount(0);
+    await expect(fileRows(graphFrame, source, "b.txt")).toBeVisible();
+    await expect
+      .poll(async () => (await testRepo.jjCommand(["file", "list", "-r", target])).stdout.toString())
+      .toContain("a.txt");
+  });
+
   test("showChangedFiles renders files and click opens diff", async ({ graphFrame, testRepo, workbox }) => {
-    await testRepo.commitFile("a.txt", "content a", "commit A");
-    await testRepo.commitFile("b.txt", "content b", "commit B");
+    const changeA = await testRepo.commitFile("a.txt", "content a", "commit A");
+    const changeB = await testRepo.commitFile("b.txt", "content b", "commit B");
 
-    await expect(graphFrame.locator('[data-role="changed-file"][data-path="a.txt"]')).toBeVisible();
-    await expect(graphFrame.locator('[data-role="changed-file"][data-path="b.txt"]')).toBeVisible();
+    await graphFrame.locator(`#nodes > div[data-change-id^="${changeA}/"] [data-role="files-toggle"]`).click();
+    await graphFrame.locator(`#nodes > div[data-change-id^="${changeB}/"] [data-role="files-toggle"]`).click();
 
-    const aFile = graphFrame.locator('[data-role="changed-file"][data-path="a.txt"]');
+    await expect(fileRows(graphFrame, changeA, "a.txt")).toBeVisible();
+    await expect(fileRows(graphFrame, changeB, "b.txt")).toBeVisible();
+
+    const aFile = fileRows(graphFrame, changeA, "a.txt");
     await aFile.click();
 
     const diffEditor = workbox.locator(".editor-instance");
@@ -59,18 +157,19 @@ test.describe("with showChangedFiles enabled", () => {
 
     const changeRow = graphFrame.locator(`#nodes > div[data-change-id^="${conflictedChangeId}/"]`);
     await expect(changeRow).toBeVisible();
+    await changeRow.locator('[data-role="files-toggle"]').click();
 
-    const conflictFile = changeRow.locator('[data-role="changed-file"][data-path="conflict.txt"]');
+    const conflictFile = fileRows(graphFrame, conflictedChangeId, "conflict.txt");
     await expect(conflictFile).toBeVisible();
     // The status letter keeps its plain meaning but is marked as conflicted
     // (A! with conflict color), not rendered as a regular addition.
     await expect(conflictFile).toHaveAttribute("data-conflict", "");
-    await expect(conflictFile.locator("span").first()).toHaveText("A!");
+    await expect(conflictFile.locator(`[data-role="file-status"]`)).toHaveText("A!");
 
-    const plainFile = changeRow.locator('[data-role="changed-file"][data-path="plain.txt"]');
+    const plainFile = fileRows(graphFrame, conflictedChangeId, "plain.txt");
     await expect(plainFile).toBeVisible();
     await expect(plainFile).not.toHaveAttribute("data-conflict", "");
-    await expect(plainFile.locator("span").first()).toHaveText("A");
+    await expect(plainFile.locator(`[data-role="file-status"]`)).toHaveText("A");
   });
 
   test("changed-file context menu matches the SCM view context menu", async ({
@@ -85,12 +184,12 @@ test.describe("with showChangedFiles enabled", () => {
     const workingCopyChangeId = (await testRepo.log("@"))[0].change_id;
     const commitAChangeId = (await testRepo.log("@-"))[0].change_id;
 
-    const workingCopyFile = graphFrame
-      .locator(`#nodes > div[data-change-id^="${workingCopyChangeId}/"]`)
-      .locator('[data-role="changed-file"][data-path="a.txt"]');
-    const commitAFile = graphFrame
-      .locator(`#nodes > div[data-change-id^="${commitAChangeId}/"]`)
-      .locator('[data-role="changed-file"][data-path="a.txt"]');
+    const workingCopyFile = fileRows(graphFrame, workingCopyChangeId, "a.txt");
+    const commitAFile = fileRows(graphFrame, commitAChangeId, "a.txt");
+    await graphFrame
+      .locator(`#nodes > div[data-change-id^="${workingCopyChangeId}/"] [data-role="files-toggle"]`)
+      .click();
+    await graphFrame.locator(`#nodes > div[data-change-id^="${commitAChangeId}/"] [data-role="files-toggle"]`).click();
     await expect(workingCopyFile).toBeVisible();
     await expect(commitAFile).toBeVisible();
 

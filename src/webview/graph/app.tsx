@@ -26,6 +26,8 @@ import {
   tooltip,
   showTooltips,
   showChangedFiles,
+  expandedFileLists,
+  changedFilesCache,
   pillContextMenu,
   remoteRefContextMenu,
   closeAllMenus,
@@ -55,6 +57,13 @@ export function App() {
       const newChangeIds = new Set(message.changes.filter((c) => c.branchType !== "~").map((c) => c.id.changeId));
       const preserved = new Set(Array.from(selectedNodes.value).filter((id) => newChangeIds.has(id)));
       selectedNodes.value = preserved;
+      expandedFileLists.value = new Set(Array.from(expandedFileLists.value).filter((id) => newChangeIds.has(id)));
+      const newCommitIds = new Set(
+        message.changes.filter((c): c is RegularChangeNode => c.branchType !== "~").map((c) => c.commitId),
+      );
+      changedFilesCache.value = new Map(
+        Array.from(changedFilesCache.value).filter(([commitId]) => newCommitIds.has(commitId)),
+      );
       diffStatsCache.value = new Map();
       const activeTooltip = tooltip.value;
       if (activeTooltip) {
@@ -89,6 +98,31 @@ export function App() {
       }
     });
 
+    // Changed files are loaded lazily: request them for every expanded change
+    // whose commit has not been loaded yet (or failed to load).
+    const disposeChangedFilesFetch = effect(() => {
+      const expanded = expandedFileLists.value;
+      if (!showChangedFiles.value || expanded.size === 0) {
+        return;
+      }
+      const cache = changedFilesCache.peek();
+      const missing = currentChanges.value.filter(
+        (c): c is RegularChangeNode =>
+          c.branchType !== "~" &&
+          expanded.has(c.id.changeId) &&
+          (!cache.has(c.commitId) || cache.get(c.commitId) === "error"),
+      );
+      if (missing.length === 0) {
+        return;
+      }
+      const next = new Map(cache);
+      for (const change of missing) {
+        next.set(change.commitId, "loading");
+        postMessage({ command: "fetchChangedFiles", commitId: change.commitId });
+      }
+      changedFilesCache.value = next;
+    });
+
     const handleMessage = (event: MessageEvent) => {
       const message = event.data as ExtensionToWebviewMessage;
       switch (message.command) {
@@ -119,6 +153,15 @@ export function App() {
           if (state && state.change.id.changeId === message.changeId) {
             tooltip.value = { ...state };
           }
+          break;
+        }
+        case "changedFilesResponse": {
+          if (changedFilesCache.value.get(message.commitId) !== "loading") {
+            break;
+          }
+          const next = new Map(changedFilesCache.value);
+          next.set(message.commitId, message.files ?? "error");
+          changedFilesCache.value = next;
           break;
         }
         case "bookmarkTrackingRemotesResponse": {
@@ -222,6 +265,7 @@ export function App() {
 
     return () => {
       dispose();
+      disposeChangedFilesFetch();
       window.removeEventListener("message", handleMessage);
       window.removeEventListener("blur", closeAllMenus);
       window.removeEventListener("resize", handleResize);

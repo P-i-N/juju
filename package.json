@@ -937,7 +937,7 @@
         "jjx.showChangedFiles": {
           "type": "boolean",
           "default": false,
-          "description": "⚠️ Experimental: Show changed files for each commit in the graph (similar to `jj log -s`). Clicking a file opens a diff at that revision.",
+          "description": "⚠️ Experimental: Show an expandable list of changed files for each commit in the graph (similar to `jj log -s`). Click the arrow next to a commit (or press Right/Left on the selection) to expand or collapse its files. Clicking a file opens a diff at that revision; dragging it onto another change moves its changes there.",
           "scope": "resource"
         }
       }

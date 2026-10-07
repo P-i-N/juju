@@ -100,108 +100,118 @@
   height: 20px;
   flex: 1;
   min-width: 0;
+  justify-content: center;
 }
 
 .changeNode.compactMode .description {
   display: none;
 }
 
-.changeNode.compactMode:not(.showingFilesMode) .changeIdLeft {
+.changeNode.compactMode .changeIdLeft {
   align-self: center;
 }
 
-.changeNode.compactMode:not(.showingFilesMode) .textContent {
-  justify-content: center;
+.filesToggle {
+  display: inline-block;
+  width: 16px;
+  margin-right: 2px;
+  vertical-align: text-bottom;
+  position: relative;
+  top: 0px;
+  text-align: center;
+  border-radius: 3px;
+  opacity: 0.7;
 }
 
-.changeNode.showingFilesMode:not(.elidedNode) .textContent {
-  height: auto;
-  min-height: 28px;
-  overflow: visible;
-}
-
-.changeNode.compactMode.showingFilesMode:not(.elidedNode) .textContent {
-  height: auto;
-  min-height: 20px;
-  overflow: visible;
-}
-
-.changeNode.compactMode.showingFilesMode .textContent > div:first-child {
-  margin-top: 1px;
-}
-
-.changeNode.compactMode.showingFilesMode .changeIdLeft {
-  margin-top: 2px;
-}
-
-.changedFiles {
-  margin-top: 2px;
-  padding-left: 14px;
-  font-size: 0.85em;
-  line-height: 1.4;
-  user-select: none;
+.filesToggle.codicon {
+  font-size: 14px;
   font-weight: normal;
 }
 
-.changedFile {
+.filesToggle.codicon:hover {
+  opacity: 1;
+  background: var(--vscode-toolbar-hoverBackground);
+}
+
+.fileRow {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   cursor: pointer;
-  padding: 0px 4px;
-  width: fit-content;
-  max-width: 100%;
+  padding-left: calc(
+    var(--change-id-ch-width, 4ch) + var(--change-id-offset-width, 0ch) + var(--change-id-right-padding) +
+      var(--graph-width) + 4px + 18px
+  );
+  line-height: 1.6;
+  user-select: none;
 }
 
-.changedFile:hover {
-  background: var(--vscode-list-hoverBackground);
+.fileRow:hover {
+  background-color: var(--vscode-list-hoverBackground);
 }
 
-.changeNode.selected .changedFile:hover {
-  background: transparent;
+.fileRow.selected {
+  background-color: var(--vscode-list-activeSelectionBackground);
 }
 
-.changedFile:hover .changedFilePath {
-  text-decoration: underline;
+.fileRowMessage {
+  cursor: default;
+  font-style: italic;
+  opacity: 0.6;
 }
 
-.changedFileStatus {
-  display: inline-block;
+.fileRowMessage:hover {
+  background-color: transparent;
+}
+
+.fileName {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.fileRow[data-status="d"] .fileName {
+  text-decoration: line-through;
+}
+
+.fileDirectory {
+  flex: 1;
+  min-width: 0;
+  margin-left: 0.5em;
+  color: var(--vscode-foreground);
+  opacity: 0.7;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.fileStatus {
+  flex-shrink: 0;
   min-width: 1.2em;
-  font-weight: bold;
-  text-align: left;
-  margin-right: 6px;
+  margin-left: auto;
+  padding: 0 12px 0 8px;
+  text-align: center;
 }
 
-.changedFile[data-status="a"],
-.changedFile[data-status="c"] {
+.fileRow[data-status="a"],
+.fileRow[data-status="c"] {
   color: var(--vscode-jjDecoration-addedResourceForeground, var(--vscode-gitDecoration-addedResourceForeground));
 }
 
-.changedFile[data-status="m"] {
+.fileRow[data-status="m"] {
   color: var(--vscode-jjDecoration-modifiedResourceForeground, var(--vscode-gitDecoration-modifiedResourceForeground));
 }
 
-.changedFile[data-status="d"] {
+.fileRow[data-status="d"] {
   color: var(--vscode-jjDecoration-deletedResourceForeground, var(--vscode-gitDecoration-deletedResourceForeground));
 }
 
-.changedFile[data-status="r"] {
+.fileRow[data-status="r"] {
   color: var(--vscode-jjDecoration-renamedResourceForeground, var(--vscode-gitDecoration-renamedResourceForeground));
 }
 
-.changedFile[data-status="x"],
-.changedFile[data-conflict] {
+.fileRow[data-status="x"],
+.fileRow[data-conflict] {
   color: var(
     --vscode-jjDecoration-conflictingResourceForeground,
     var(--vscode-gitDecoration-conflictingResourceForeground)
   );
-}
-
-.changedFilePath {
-  color: var(--vscode-foreground);
-  opacity: 0.85;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  min-width: 0;
 }

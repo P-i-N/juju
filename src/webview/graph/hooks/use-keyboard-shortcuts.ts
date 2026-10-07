@@ -1,6 +1,15 @@
 import { useEffect } from "preact/hooks";
 import { editChange } from "../edit-change";
-import { currentChanges, isAnyMenuOpen, isDragging, postMessage, selectedNodes, selectionAnchorId } from "../signals";
+import {
+  currentChanges,
+  isAnyMenuOpen,
+  isDragging,
+  postMessage,
+  selectedNodes,
+  selectionAnchorId,
+  setFileListsExpanded,
+  showChangedFiles,
+} from "../signals";
 import { computeArrowKeySelection, computeShiftArrowKeySelection, lastSelectedChangeId } from "../selection";
 import type { FullChangeId, RegularChangeNode } from "../../../graph-protocol";
 
@@ -11,6 +20,8 @@ import type { FullChangeId, RegularChangeNode } from "../../../graph-protocol";
  *   (no page scrolling) whenever the graph is shown. Shift+ArrowUp/ArrowDown
  *   extend the selection by one selectable row instead, like a Shift+click
  *   range from the selection anchor.
+ * - ArrowRight/ArrowLeft expand/collapse the changed-file lists of the
+ *   selected changes when changed files are shown.
  * - Delete abandons the selected changes exactly like the "Abandon Change" and
  *   "Abandon All Selected Changes" context menu items; the extension side asks
  *   for confirmation before abandoning anything.
@@ -96,6 +107,14 @@ export function useKeyboardShortcuts() {
       postMessage({ command: "newChildChange", changeIds: selection });
     };
 
+    const expandSelection = (e: KeyboardEvent, expanded: boolean) => {
+      if (!showChangedFiles.value || selectedNodes.value.size === 0) {
+        return;
+      }
+      e.preventDefault();
+      setFileListsExpanded(selectedNodes.value, expanded);
+    };
+
     const openDetailsView = (e: KeyboardEvent) => {
       e.preventDefault();
       postMessage({ command: "openDetailsView" });
@@ -126,6 +145,12 @@ export function useKeyboardShortcuts() {
           return;
         case "ArrowUp":
           moveSelection(e, -1, e.shiftKey);
+          return;
+        case "ArrowRight":
+          expandSelection(e, true);
+          return;
+        case "ArrowLeft":
+          expandSelection(e, false);
           return;
         case "Delete":
           abandonSelection(e);

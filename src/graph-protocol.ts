@@ -54,7 +54,6 @@ export interface RegularChangeNode extends ChangeNodeBase {
   conflict: boolean;
   isEmpty: boolean;
   elided?: number;
-  changedFiles?: ChangedFile[];
 }
 
 export type ChangeNode = ElidedChangeNode | RegularChangeNode;
@@ -104,6 +103,8 @@ export interface DiffStats {
 export type WebviewToExtensionMessage =
   | { command: "webviewReady" }
   | { command: "fetchDiffStats"; changeId: FullChangeId }
+  | { command: "fetchChangedFiles"; commitId: string }
+  | { command: "moveFileChanges"; fromChangeId: FullChangeId; toChangeId: FullChangeId; paths: string[] }
   | { command: "editChange"; changeId: FullChangeId }
   | { command: "editChangeDirect"; changeId: FullChangeId }
   | { command: "newChildChange"; changeIds: FullChangeId[] }
@@ -187,6 +188,7 @@ export type ExtensionToWebviewMessage =
   | { command: "showNoRepoFoundState" }
   | { command: "showErrorState" }
   | { command: "diffStatsResponse"; changeId: FullChangeId; stats: DiffStats }
+  | { command: "changedFilesResponse"; commitId: string; files: ChangedFile[] | null }
   | {
       command: "bookmarkTrackingRemotesResponse";
       bookmark: string;

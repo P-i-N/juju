@@ -38,8 +38,9 @@ system.
 - Compare two selected changes with a diff or interdiff
 - Create merge changes by selecting multiple changes and then pressing the "+" button
 - Drag & drop changes onto other changes
-- Optionally show each commit's changed files inline in the graph (like `jj log -s`), with one-click diff opening (⚠️
-  experimental, enable with `jjx.showChangedFiles`)
+- Optionally show each commit's changed files in the graph (like `jj log -s`) behind an expand arrow next to the commit.
+  Click a file to open its diff, or drag it onto another change to move its changes there (⚠️ experimental, enable with
+  `jjx.showChangedFiles`)
 - Keyboard shortcuts:
   - `ArrowUp` / `ArrowDown`: Move the selection by one change
   - `Shift` + `ArrowUp` / `ArrowDown`: Extend the selection by one change, like a `Shift` + click
@@ -53,6 +54,8 @@ system.
   - `b`: Create a bookmark on the last selected change
   - `t`: Create a tag on the last selected change
   - `s`: Split the last selected change
+  - `ArrowRight` / `ArrowLeft`: Expand/collapse the changed files of the selected change(s) (with
+    `jjx.showChangedFiles`)
 
 ### 🖱️ Context menu
 
@@ -162,24 +165,24 @@ system.
 
 The following settings can be configured in VS Code's settings:
 
-| Setting                             | Default     | Description                                                                                                                                            |
-| ----------------------------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `jjx.autoSwitchRepository`          | `true`      | Automatically switch the repository shown in the JJ Graph and Operation Log views to the repository containing the active editor                       |
-| `jjx.autoUpdateStaleWorkspace`      | `true`      | Automatically run `jj workspace update-stale` when the current workspace is stale                                                                      |
-| `jjx.baseWebURL`                    | `""`        | Base URL for the 'Copy URL' feature (e.g., `https://github.com/user/repo`). Overrides `git_web_url()` when set                                         |
-| `jjx.changeDoubleClickAction`       | `"new"`     | Action when double-clicking a change in the graph view: `"edit"` (jj edit) or `"new"` (jj new)                                                         |
-| `jjx.commandTimeout`                | `null`      | Global timeout in milliseconds for all jj commands. If not set, per-command defaults will be used                                                      |
-| `jjx.commitAction`                  | `"commit"`  | Action when pressing Ctrl+Enter in source control: `"commit"` (jj commit) or `"new"` (jj new). Ctrl+Shift+Enter does the same but also opens an editor |
-| `jjx.elideImmutableCommits`         | `true`      | Hide chains of immutable commits between relevant commits in the graph view                                                                            |
-| `jjx.elidedVisibleImmutableParents` | `1`         | Number of immutable parent commits to show in the log when eliding commits                                                                             |
-| `jjx.enableAnnotations`             | `true`      | Enables in-line blame annotations                                                                                                                      |
-| `jjx.fileClickAction`               | `"diff"`    | Action when clicking a file: `"diff"` (compare to parent), `"at-revision"` (open at clicked revision), or `"working-copy"` (open in working copy)      |
-| `jjx.graphStyle`                    | `"compact"` | Display style for commits: `"full"` shows all details, `"compact"` shows single line                                                                   |
-| `jjx.jjPath`                        | `""`        | Path to the jj executable. If not set, your PATH and common locations will be searched                                                                 |
-| `jjx.logLimit`                      | `500`       | Maximum number of commits shown in the graph view                                                                                                      |
-| `jjx.pollIntervalSeconds`           | `30`        | Interval in seconds between repository polls. Set to 0 to disable                                                                                      |
-| `jjx.showChangedFiles`              | `false`     | ⚠️ Experimental: Show changed files for each commit in the graph (similar to `jj log -s`). Clicking a file opens a diff at that revision               |
-| `jjx.showTooltips`                  | `true`      | Show tooltips when hovering over commits in the graph view                                                                                             |
+| Setting                             | Default     | Description                                                                                                                                                    |
+| ----------------------------------- | ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `jjx.autoSwitchRepository`          | `true`      | Automatically switch the repository shown in the JJ Graph and Operation Log views to the repository containing the active editor                               |
+| `jjx.autoUpdateStaleWorkspace`      | `true`      | Automatically run `jj workspace update-stale` when the current workspace is stale                                                                              |
+| `jjx.baseWebURL`                    | `""`        | Base URL for the 'Copy URL' feature (e.g., `https://github.com/user/repo`). Overrides `git_web_url()` when set                                                 |
+| `jjx.changeDoubleClickAction`       | `"new"`     | Action when double-clicking a change in the graph view: `"edit"` (jj edit) or `"new"` (jj new)                                                                 |
+| `jjx.commandTimeout`                | `null`      | Global timeout in milliseconds for all jj commands. If not set, per-command defaults will be used                                                              |
+| `jjx.commitAction`                  | `"commit"`  | Action when pressing Ctrl+Enter in source control: `"commit"` (jj commit) or `"new"` (jj new). Ctrl+Shift+Enter does the same but also opens an editor         |
+| `jjx.elideImmutableCommits`         | `true`      | Hide chains of immutable commits between relevant commits in the graph view                                                                                    |
+| `jjx.elidedVisibleImmutableParents` | `1`         | Number of immutable parent commits to show in the log when eliding commits                                                                                     |
+| `jjx.enableAnnotations`             | `true`      | Enables in-line blame annotations                                                                                                                              |
+| `jjx.fileClickAction`               | `"diff"`    | Action when clicking a file: `"diff"` (compare to parent), `"at-revision"` (open at clicked revision), or `"working-copy"` (open in working copy)              |
+| `jjx.graphStyle`                    | `"compact"` | Display style for commits: `"full"` shows all details, `"compact"` shows single line                                                                           |
+| `jjx.jjPath`                        | `""`        | Path to the jj executable. If not set, your PATH and common locations will be searched                                                                         |
+| `jjx.logLimit`                      | `500`       | Maximum number of commits shown in the graph view                                                                                                              |
+| `jjx.pollIntervalSeconds`           | `30`        | Interval in seconds between repository polls. Set to 0 to disable                                                                                              |
+| `jjx.showChangedFiles`              | `false`     | ⚠️ Experimental: Show an expandable list of changed files for each commit in the graph (similar to `jj log -s`). Clicking a file opens a diff at that revision |
+| `jjx.showTooltips`                  | `true`      | Show tooltips when hovering over commits in the graph view                                                                                                     |
 
 ## 🐛 Known issues
 
