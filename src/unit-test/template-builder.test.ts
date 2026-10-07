@@ -7,6 +7,7 @@ import {
   LOG_TEMPLATE,
   buildLogTemplate,
   buildOperationTemplate,
+  buildSnapshotLogTemplate,
   CONFLICTED_FILES_TEMPLATE,
   WORKSPACE_LIST_TEMPLATE,
 } from "../template-builder";
@@ -256,5 +257,69 @@ describe("TemplateBuilder Test Suite", () => {
     assert.ok(result.includes("self.attributes()"));
     assert.ok(!result.includes("self.tags()"));
     assert.ok(result.includes('\\"attributes\\"'), "JSON key is 'attributes'");
+  });
+
+  it("generateTemplate with conditional string_array field", () => {
+    const fields: TemplateFields = {
+      files: {
+        type: "conditional",
+        condition: "self.current_working_copy()",
+        field: { type: "string_array", expr: "self.files()", loopVar: "f", value: "f.path().display()" },
+      },
+    };
+    assert.strictEqual(
+      generateTemplate(fields),
+      `"{" ++ "\\"files\\": " ++ if(self.current_working_copy(), "[" ++ self.files().map(|f| stringify(f.path().display()).escape_json()).join(",") ++ "]", "null") ++ "}\\n"`,
+    );
+  });
+
+  it("generateTemplate with conditional array field", () => {
+    const fields: TemplateFields = {
+      items: {
+        type: "conditional",
+        condition: "cond",
+        field: {
+          type: "array",
+          expr: "self.diff().files()",
+          loopVar: "entry",
+          contents: { status_char: { type: "string", expr: "entry.status_char()" } },
+        },
+      },
+    };
+    assert.strictEqual(
+      generateTemplate(fields),
+      `"{" ++ "\\"items\\": " ++ if(cond, "[" ++ self.diff().files().map(|entry| "{" ++ "\\"status_char\\": " ++ stringify(entry.status_char()).escape_json() ++ "}").join(",") ++ "]", "null") ++ "}\\n"`,
+    );
+  });
+
+  it("generateTemplate with conditional primitive and dict fields", () => {
+    const fields: TemplateFields = {
+      a: { type: "conditional", condition: "c", field: { type: "boolean", expr: "self.empty()" } },
+      b: {
+        type: "conditional",
+        condition: "c",
+        field: { type: "dict", contents: { n: { type: "number", expr: "x.len()" } } },
+      },
+    };
+    assert.strictEqual(
+      generateTemplate(fields),
+      `"{" ++ "\\"a\\": " ++ if(c, if(self.empty(), "true", "false"), "null") ++ "," ++ "\\"b\\": " ++ if(c, "{" ++ "\\"n\\": " ++ x.len() ++ "}", "null") ++ "}\\n"`,
+    );
+  });
+
+  it("buildSnapshotLogTemplate limits diff data to @ and its parents and tracked files to @", () => {
+    const template = buildSnapshotLogTemplate({ includeFilesForAll: false });
+    const condition = `self.current_working_copy() || self.contained_in("parents(@)")`;
+    assert.ok(template.includes(`"\\"diff_files\\": " ++ if(${condition}, "[" ++ self.diff().files().map(`));
+    assert.ok(template.includes(`"\\"conflicted_files\\": " ++ if(${condition}, "[" ++ self.conflicted_files().map(`));
+    assert.ok(template.includes(`"\\"tracked_files\\": " ++ if(self.current_working_copy(), "[" ++ self.files().map(`));
+    assert.ok(template.includes(`"\\"change_id\\": "`));
+  });
+
+  it("buildSnapshotLogTemplate emits unconditional diff data when files are shown for all changes", () => {
+    const template = buildSnapshotLogTemplate({ includeFilesForAll: true });
+    assert.ok(template.includes(`"\\"diff_files\\": [" ++ self.diff().files().map(`));
+    assert.ok(template.includes(`"\\"conflicted_files\\": [" ++ self.conflicted_files().map(`));
+    assert.ok(template.includes(`"\\"tracked_files\\": " ++ if(self.current_working_copy(), "[" ++ self.files().map(`));
   });
 });

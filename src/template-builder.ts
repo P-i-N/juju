@@ -29,7 +29,15 @@ interface StringArrayField {
   value: string;
 }
 
-type TemplateField = PrimitiveField | DictField | ArrayField | StringArrayField;
+type UnconditionalField = PrimitiveField | DictField | ArrayField | StringArrayField;
+
+interface ConditionalField {
+  type: "conditional";
+  condition: string;
+  field: UnconditionalField;
+}
+
+type TemplateField = UnconditionalField | ConditionalField;
 
 export type TemplateFields = Record<string, TemplateField>;
 
@@ -46,6 +54,24 @@ function generatePrimitiveValue(field: PrimitiveField): string {
     return `if(${value}, "true", "false")`;
   }
   return value;
+}
+
+function generateFieldValue(field: UnconditionalField): string {
+  switch (field.type) {
+    case "string":
+    case "raw":
+    case "number":
+    case "boolean":
+      return generatePrimitiveValue(field);
+    case "dict":
+      return `"{" ++ ${generateFields(field.contents)} ++ "}"`;
+    case "array": {
+      const inner = generateFields(field.contents, field.loopVar);
+      return `"[" ++ ${field.expr}.map(|${field.loopVar}| "{" ++ ${inner} ++ "}").join(",") ++ "]"`;
+    }
+    case "string_array":
+      return `"[" ++ ${field.expr}.map(|${field.loopVar}| stringify(${field.value}).escape_json()).join(",") ++ "]"`;
+  }
 }
 
 function generateFieldEntry(name: string, field: TemplateField): string {
@@ -70,11 +96,19 @@ function generateFieldEntry(name: string, field: TemplateField): string {
     }
     case "string_array":
       return `"\\"${escapedName}\\": [" ++ ${field.expr}.map(|${field.loopVar}| stringify(${field.value}).escape_json()).join(",") ++ "]"`;
+    case "conditional":
+      return `"\\"${escapedName}\\": " ++ if(${field.condition}, ${generateFieldValue(field.field)}, "null")`;
   }
 }
 
 function applyPrefix(field: TemplateField, prefix: string): TemplateField {
-  if (prefix && field.type !== "dict" && field.type !== "array" && field.type !== "string_array") {
+  if (
+    prefix &&
+    field.type !== "dict" &&
+    field.type !== "array" &&
+    field.type !== "string_array" &&
+    field.type !== "conditional"
+  ) {
     const value = field.expr;
     const prefixedValue = value.includes(".") || value.includes("(") ? value : `${prefix}.${value}`;
     return { ...field, expr: prefixedValue };
@@ -310,7 +344,7 @@ const LOG_ENTRY_FIELDS: TemplateFields = {
   },
 };
 
-const DIFF_FILES_FIELD: TemplateFields = {
+const DIFF_FILES_FIELD: Record<"diff_files" | "conflicted_files", UnconditionalField> = {
   diff_files: {
     type: "array",
     expr: "self.diff().files()",
@@ -346,6 +380,30 @@ export function buildLogTemplate(opts?: { includeFiles?: boolean }): string {
  */
 export function buildDetailsTemplate(): string {
   return generateTemplate({ ...LOG_ENTRY_FIELDS, ...DIFF_FILES_FIELD, ...DIFF_STATS_FIELDS });
+}
+
+const WORKING_COPY_OR_PARENT = `self.current_working_copy() || self.contained_in("parents(@)")`;
+
+export function buildSnapshotLogTemplate(opts: { includeFilesForAll: boolean }): string {
+  const diffFields: TemplateFields = opts.includeFilesForAll
+    ? DIFF_FILES_FIELD
+    : {
+        diff_files: { type: "conditional", condition: WORKING_COPY_OR_PARENT, field: DIFF_FILES_FIELD.diff_files },
+        conflicted_files: {
+          type: "conditional",
+          condition: WORKING_COPY_OR_PARENT,
+          field: DIFF_FILES_FIELD.conflicted_files,
+        },
+      };
+  return generateTemplate({
+    ...LOG_ENTRY_FIELDS,
+    ...diffFields,
+    tracked_files: {
+      type: "conditional",
+      condition: "self.current_working_copy()",
+      field: { type: "string_array", expr: "self.files()", loopVar: "f", value: "f.path().display()" },
+    },
+  });
 }
 
 /**
