@@ -417,9 +417,7 @@ export class JJRepository {
       ? ["-r", `(${request.graph.revset}) | @ | parents(@)`, "-n", request.graph.limit.toString()]
       : ["-r", "@ | parents(@)"];
     const entries = this.parseLogEntries(
-      (
-        await this.jjCommandRead(["log", ...revsetArgs, "--no-graph", "-T", template], { token }, operationId)
-      ).toString(),
+      (await this.jjCommandRead(["log", ...revsetArgs, "-T", template], { token }, operationId)).toString(),
       includeFiles,
     );
 
