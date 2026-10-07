@@ -20,6 +20,7 @@ interface DetailsPanel {
   pinnedCommitId: string | undefined;
   postedKey: string | undefined;
   fetchSeq: number;
+  lastFetchStartedAt: number;
   disposed: boolean;
 }
 
@@ -85,14 +86,19 @@ export class DetailsWebview implements vscode.Disposable {
   /**
    * Re-fetches the details shown by every open panel. Called after the repository changed,
    * because metadata shown in the view (bookmarks, tags) can move between commits even
-   * though the selected commit IDs are immutable.
+   * though the selected commit IDs are immutable. Panels whose details were already fetched at
+   * or after `skipFetchedSince` (a `Date.now()` timestamp) are up to date and are skipped.
    */
-  public async refresh(): Promise<void> {
-    if (this.selectionPanel) {
+  public async refresh(skipFetchedSince?: number): Promise<void> {
+    const isFresh = (detailsPanel: DetailsPanel) =>
+      skipFetchedSince !== undefined && detailsPanel.lastFetchStartedAt >= skipFetchedSince;
+    if (this.selectionPanel && !isFresh(this.selectionPanel)) {
       await this.syncPanel(this.selectionPanel, true);
     }
     for (const detailsPanel of this.pinnedPanels) {
-      await this.syncPanel(detailsPanel, true);
+      if (!isFresh(detailsPanel)) {
+        await this.syncPanel(detailsPanel, true);
+      }
     }
   }
 
@@ -117,6 +123,7 @@ export class DetailsWebview implements vscode.Disposable {
       pinnedCommitId,
       postedKey: undefined,
       fetchSeq: 0,
+      lastFetchStartedAt: 0,
       disposed: false,
     };
     panel.webview.html = this.getWebviewContent(panel.webview);
@@ -156,6 +163,7 @@ export class DetailsWebview implements vscode.Disposable {
       void panel.webview.postMessage({ command: "showNoSelection" });
       return;
     }
+    detailsPanel.lastFetchStartedAt = Date.now();
     try {
       const details = await repo.getChangeDetails(commitId);
       if (seq !== detailsPanel.fetchSeq || detailsPanel.disposed) {

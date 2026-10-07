@@ -61,7 +61,7 @@ import {
 } from "./jj-editor";
 import { TIMEOUTS, type JJVersion, versionAtLeast, JJ_VERSION_WITH_TAG_TRACKING } from "./constants";
 import { withDivergenceHandling } from "./divergence-handling";
-import { hasMissingParents } from "./snapshot-status";
+import { needsWorkingCopyFallback } from "./snapshot-status";
 import { joinRepositoryPath, resolveRepositoryPath, repositoryRelativePath, toWorkspaceUri } from "./workspace-paths";
 import type {
   FileStatus,
@@ -119,7 +119,7 @@ export type ChangedSnapshot = {
   operationId: string;
   operations: Operation[];
   entries: LogEntry[];
-  missingParentEntries: LogEntry[];
+  fallbackEntries: LogEntry[];
   graphLoaded: boolean;
 };
 export type RepositorySnapshot = { changed: false; operationId: string } | ChangedSnapshot;
@@ -421,11 +421,15 @@ export class JJRepository {
       includeFiles,
     );
 
-    let missingParentEntries: LogEntry[] = [];
-    if (hasMissingParents(entries)) {
-      missingParentEntries = this.parseLogEntries(
+    let fallbackEntries: LogEntry[] = [];
+    if (needsWorkingCopyFallback(entries)) {
+      fallbackEntries = this.parseLogEntries(
         (
-          await this.jjCommandRead(["log", "-r", "parents(@)", "--no-graph", "-T", template], { token }, operationId)
+          await this.jjCommandRead(
+            ["log", "-r", "@ | parents(@)", "--no-graph", "-T", template],
+            { token },
+            operationId,
+          )
         ).toString(),
         includeFiles,
       );
@@ -436,7 +440,7 @@ export class JJRepository {
       operationId,
       operations,
       entries,
-      missingParentEntries,
+      fallbackEntries,
       graphLoaded: request.graph !== undefined,
     };
   }
@@ -519,10 +523,6 @@ export class JJRepository {
 
     this.statusCache = status;
     return status;
-  }
-
-  async fileList(token?: vscode.CancellationToken, operationId?: string) {
-    return (await this.jjCommandRead(["file", "list"], { token }, operationId)).toString().trim().split("\n");
   }
 
   /**

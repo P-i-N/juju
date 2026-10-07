@@ -19,10 +19,10 @@ function findWorkingCopy(entries: LogEntry[]): LogEntry | undefined {
   return entries.find((e) => e.current_working_copy);
 }
 
-export function hasMissingParents(entries: LogEntry[]): boolean {
+export function needsWorkingCopyFallback(entries: LogEntry[]): boolean {
   const workingCopy = findWorkingCopy(entries);
   if (!workingCopy) {
-    return false;
+    return true;
   }
   const keys = new Set(entries.map(entryKey));
   return workingCopy.parents.some((p) => !keys.has(entryKey(p)));
@@ -37,7 +37,13 @@ export function statusFromSnapshot(
   if (!workingCopyEntry) {
     throw new Error("The repository snapshot does not contain the working copy.");
   }
-  const entriesByKey = new Map(entries.map((e) => [entryKey(e), e]));
+  const entriesByKey = new Map<string, LogEntry>();
+  for (const e of entries) {
+    const key = entryKey(e);
+    if (!entriesByKey.has(key)) {
+      entriesByKey.set(key, e);
+    }
+  }
   const parentEntries = workingCopyEntry.parents.map((p) => {
     const parentEntry = entriesByKey.get(entryKey(p));
     if (!parentEntry) {

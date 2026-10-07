@@ -778,13 +778,13 @@ export function registerInitCommands(state: ExtensionState): void {
           return foundStatus;
         });
       } else if (scm.parentResourceGroups.includes(resourceGroup)) {
-        const show = scm.parentFiles.get(resourceGroup.id);
-        if (!show) {
-          throw new Error("No current parent change show result found for the resource group");
+        const parentFiles = scm.parentFiles.get(resourceGroup.id);
+        if (!parentFiles) {
+          throw new Error("No current parent change files found for the resource group");
         }
 
         statuses = resourceStates.map((resourceState) => {
-          const foundStatus = show.fileStatuses.find((status) =>
+          const foundStatus = parentFiles.fileStatuses.find((status) =>
             pathEquals(status.path, toRealPathSpelling(resourceState.resourceUri.fsPath)),
           );
           if (!foundStatus) {

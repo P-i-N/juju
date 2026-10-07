@@ -70,8 +70,8 @@ export class JJGraphWebview implements vscode.WebviewViewProvider {
     });
   }
 
-  private _onDidSwitchChange = new vscode.EventEmitter<JJRepository>();
-  readonly onDidSwitchChange: vscode.Event<JJRepository> = this._onDidSwitchChange.event;
+  private _onDidSwitchChange = new vscode.EventEmitter<void>();
+  readonly onDidSwitchChange: vscode.Event<void> = this._onDidSwitchChange.event;
 
   private lastSnapshot: ChangedSnapshot | undefined;
   private refreshHandler: ((repo: JJRepository) => Promise<void>) | undefined;
@@ -146,7 +146,7 @@ export class JJGraphWebview implements vscode.WebviewViewProvider {
               }
               await repo.editRetryImmutable(message.changeId);
             }
-            this._onDidSwitchChange.fire(repo);
+            this._onDidSwitchChange.fire();
           } catch (error: unknown) {
             showErrorMessage("Failed to switch to change", error);
           }
@@ -161,7 +161,7 @@ export class JJGraphWebview implements vscode.WebviewViewProvider {
               return;
             }
             await repo.editRetryImmutable(message.changeId);
-            this._onDidSwitchChange.fire(repo);
+            this._onDidSwitchChange.fire();
           } catch (error: unknown) {
             showErrorMessage("Failed to switch to change", error);
           }
@@ -964,7 +964,8 @@ export class JJGraphWebview implements vscode.WebviewViewProvider {
 
   private async render() {
     const snapshot = this.lastSnapshot;
-    if (!this.panel || !this.repository || !snapshot) {
+    const repository = this.repository;
+    if (!this.panel || !repository || !snapshot) {
       return;
     }
 
@@ -977,13 +978,13 @@ export class JJGraphWebview implements vscode.WebviewViewProvider {
       const elideImmutableCommits = this.getEffectiveEliding();
       const { edges, visibleIds, reachableVisibleFrom } = classifyEdges(rawEntries, {
         elideImmutableCommits,
-        elidedVisibleImmutableParents: getElidedVisibleImmutableParents(this.repository.repositoryRoot),
+        elidedVisibleImmutableParents: getElidedVisibleImmutableParents(repository.repositoryRoot),
       });
       const entriesWithSynthetics = insertSyntheticNodes(rawEntries, edges, visibleIds, reachableVisibleFrom);
       const { changes, maxPrefixLength, offsetWidth } = parseJJLogJson(
         entriesWithSynthetics,
         graphStyle,
-        this.repository.repositoryRoot,
+        repository.repositoryRoot,
       );
       this.currentChanges = changes;
       this.changesById = new Map(
@@ -1002,7 +1003,7 @@ export class JJGraphWebview implements vscode.WebviewViewProvider {
         }
       }
       if (unsyncedBookmarks.size > 0) {
-        const bookmarksWithPushTargets = await this.repository.getBookmarksWithUnsyncedNonGitRemotes(operationId);
+        const bookmarksWithPushTargets = await repository.getBookmarksWithUnsyncedNonGitRemotes(operationId);
         for (const change of changes) {
           if (change.branchType === "~") {
             continue;
@@ -1015,7 +1016,7 @@ export class JJGraphWebview implements vscode.WebviewViewProvider {
         }
       }
 
-      const supportsTagTracking = this.repository.supportsTagTracking();
+      const supportsTagTracking = repository.supportsTagTracking();
       if (supportsTagTracking) {
         const unsyncedTags = new Set<string>();
         for (const change of changes) {
@@ -1029,7 +1030,7 @@ export class JJGraphWebview implements vscode.WebviewViewProvider {
           }
         }
         if (unsyncedTags.size > 0) {
-          const tagsWithPushTargets = await this.repository.getTagsWithUnsyncedNonGitRemotes(operationId);
+          const tagsWithPushTargets = await repository.getTagsWithUnsyncedNonGitRemotes(operationId);
           for (const change of changes) {
             if (change.branchType === "~") {
               continue;
@@ -1045,17 +1046,13 @@ export class JJGraphWebview implements vscode.WebviewViewProvider {
 
       const previousSelectedNodes = this.selectedNodes;
       this.selectedNodes = new Set(Array.from(previousSelectedNodes).filter((id) => this.changesById.has(id)));
-      // Notify listeners whenever the resolved selection changed: selected changes may have
-      // been removed (e.g. abandoned) or rewritten (same change ID, new commit ID), and both
-      // the SCM view and the Details view must follow.
-      await this.fireSelection(this.resolveSelection(Array.from(this.selectedNodes)));
       const changeDoubleClickAction = config.get<string>("changeDoubleClickAction") || "edit";
 
       let currentWorkspace: string | undefined;
       const workspace = currentWorkspaceFromEntries(rawEntries);
       if (workspace.lookupNeeded) {
         try {
-          currentWorkspace = await this.repository.getCurrentWorkspaceName(operationId);
+          currentWorkspace = await repository.getCurrentWorkspaceName(operationId);
         } catch (error: unknown) {
           logger.warn(
             `Failed to determine the current workspace: ${error instanceof Error ? error.message : String(error)}`,
@@ -1081,7 +1078,14 @@ export class JJGraphWebview implements vscode.WebviewViewProvider {
         supportsTagTracking,
         currentWorkspace,
       };
+      if (this.lastSnapshot !== snapshot || this.repository !== repository) {
+        return;
+      }
       this.postMessageToWebview(msg);
+      // Notify listeners whenever the resolved selection changed: selected changes may have
+      // been removed (e.g. abandoned) or rewritten (same change ID, new commit ID), and both
+      // the SCM view and the Details view must follow.
+      await this.fireSelection(this.resolveSelection(Array.from(this.selectedNodes)));
     } catch (error) {
       logger.error(`Failed to render graph: ${error instanceof Error ? error.message : String(error)}`);
       this.postMessageToWebview({ command: "showErrorState" });

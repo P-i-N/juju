@@ -2,7 +2,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import path from "node:path";
-import { currentWorkspaceFromEntries, hasMissingParents, statusFromSnapshot } from "../snapshot-status";
+import { currentWorkspaceFromEntries, needsWorkingCopyFallback, statusFromSnapshot } from "../snapshot-status";
 import type { DiffFileEntry, FileStatus, LogEntry, RealPath } from "../types";
 
 const repoRoot = (process.platform === "win32" ? "C:\\repo" : "/repo") as RealPath;
@@ -145,6 +145,52 @@ describe("statusFromSnapshot Test Suite", () => {
     assert.strictEqual(status.parentChanges[0].changeId.changeId, "dddddddd/1");
   });
 
+  it("builds the status from working copy and parents that only come from appended fallback entries", () => {
+    const fallback = [
+      entry({
+        change_id: "wwwwwwww",
+        current_working_copy: true,
+        parents: [parentRef("pppppppp")],
+        diff_files: [modified("a.txt")],
+        conflicted_files: [],
+        tracked_files: ["a.txt"],
+      }),
+      entry({ change_id: "pppppppp", diff_files: [modified("c.txt")], conflicted_files: [] }),
+    ];
+    const { status, parentFiles } = statusFromSnapshot([entry({ change_id: "zzzzzzzz" }), ...fallback], repoRoot, []);
+    assert.strictEqual(status.workingCopy.changeId.changeId, "wwwwwwww");
+    assert.strictEqual(status.parentChanges[0].changeId.changeId, "pppppppp");
+    assert.deepStrictEqual(
+      parentFiles.get("pppppppp")?.fileStatuses.map((f) => f.file),
+      ["c.txt"],
+    );
+  });
+
+  it("prefers the first entry when fallback entries duplicate earlier ones", () => {
+    const entries = [
+      entry({
+        change_id: "wwwwwwww",
+        current_working_copy: true,
+        parents: [parentRef("pppppppp")],
+        diff_files: [],
+        conflicted_files: [],
+        tracked_files: [],
+      }),
+      entry({ change_id: "pppppppp", description: "first", diff_files: [], conflicted_files: [] }),
+      entry({
+        change_id: "wwwwwwww",
+        current_working_copy: true,
+        parents: [parentRef("pppppppp")],
+        diff_files: [],
+        conflicted_files: [],
+      }),
+      entry({ change_id: "pppppppp", description: "second", diff_files: [], conflicted_files: [] }),
+    ];
+    const { status } = statusFromSnapshot(entries, repoRoot, []);
+    assert.strictEqual(status.parentChanges.length, 1);
+    assert.strictEqual(status.parentChanges[0].description, "first");
+  });
+
   it("throws when the working copy is missing", () => {
     assert.throws(() => statusFromSnapshot([entry({ change_id: "zzzzzzzz" })], repoRoot, []), /working copy/);
   });
@@ -155,22 +201,22 @@ describe("statusFromSnapshot Test Suite", () => {
   });
 });
 
-describe("hasMissingParents Test Suite", () => {
+describe("needsWorkingCopyFallback Test Suite", () => {
   it("is false when all parents of the working copy are present", () => {
     const entries = [
       entry({ change_id: "wwwwwwww", current_working_copy: true, parents: [parentRef("pppppppp")] }),
       entry({ change_id: "pppppppp" }),
     ];
-    assert.strictEqual(hasMissingParents(entries), false);
+    assert.strictEqual(needsWorkingCopyFallback(entries), false);
   });
 
   it("is true when a parent of the working copy is absent", () => {
     const entries = [entry({ change_id: "wwwwwwww", current_working_copy: true, parents: [parentRef("pppppppp")] })];
-    assert.strictEqual(hasMissingParents(entries), true);
+    assert.strictEqual(needsWorkingCopyFallback(entries), true);
   });
 
-  it("is false without a working copy entry", () => {
-    assert.strictEqual(hasMissingParents([entry({ change_id: "zzzzzzzz" })]), false);
+  it("is true without a working copy entry", () => {
+    assert.strictEqual(needsWorkingCopyFallback([entry({ change_id: "zzzzzzzz" })]), true);
   });
 });
 

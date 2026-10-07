@@ -77,7 +77,7 @@ async function checkJJVersion(jjFilepath: string): Promise<JJVersion | undefined
   return version;
 }
 
-export type RepoUpdate = { operationId?: string; snapshot?: ChangedSnapshot; stale?: boolean };
+export type RepoUpdate = { stale?: boolean };
 
 export class WorkspaceSourceControlManager {
   private repoInfos: Map<
@@ -685,7 +685,7 @@ class RepositorySourceControlManager {
     }
 
     const snapshotStatus = statusFromSnapshot(
-      [...snapshot.entries, ...snapshot.missingParentEntries],
+      [...snapshot.entries, ...snapshot.fallbackEntries],
       this.repositoryRoot,
       this.status?.untrackedFiles ?? [],
     );
@@ -694,17 +694,19 @@ class RepositorySourceControlManager {
     // Commit the operation id only after the refresh completed so a cancelled refresh (e.g.
     // watchdog aborted) retries the same operation on the next poll.
     this.operationId = snapshot.operationId;
-    this._onDidUpdate.fire({ operationId: snapshot.operationId, snapshot });
 
     try {
       await this.consumeSnapshot(snapshot);
     } catch (error) {
       logger.error(`Failed to apply repository snapshot: ${error instanceof Error ? error.message : String(error)}`);
     }
-    if (token.isCancellationRequested) {
-      return;
+    try {
+      if (!token.isCancellationRequested) {
+        await this.refreshUntrackedFiles(token);
+      }
+    } finally {
+      this._onDidUpdate.fire({});
     }
-    await this.refreshUntrackedFiles(token);
   }
 
   private async refreshUntrackedFiles(token: vscode.CancellationToken) {
@@ -824,9 +826,9 @@ class RepositorySourceControlManager {
         );
       }
 
-      const showResult = this.parentFiles.get(parentChange.changeId.changeId);
-      if (showResult) {
-        parentChangeResourceGroup.resourceStates = buildResourceStates(showResult.fileStatuses, {
+      const parentFilesResult = this.parentFiles.get(parentChange.changeId.changeId);
+      if (parentFilesResult) {
+        parentChangeResourceGroup.resourceStates = buildResourceStates(parentFilesResult.fileStatuses, {
           changeId: parentChange.changeId.changeId,
           toRev: formatChangeIdShort(parentChange.changeId),
           fileClickAction,

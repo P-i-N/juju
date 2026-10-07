@@ -114,8 +114,9 @@ export function initInfrastructure(state: ExtensionState) {
     if (graphWebview.repository?.repositoryRoot !== repositoryRoot || !snapshot.graphLoaded) {
       return;
     }
+    const appliedAt = Date.now();
     await graphWebview.applySnapshot(snapshot);
-    await detailsWebview.refresh();
+    await detailsWebview.refresh(appliedAt);
   };
 
   context.subscriptions.push(
