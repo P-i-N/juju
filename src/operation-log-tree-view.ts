@@ -26,6 +26,10 @@ export class OperationLogManager {
     await this.operationLogTreeDataProvider.refresh(operationId);
   }
 
+  applyOperations(repositoryRoot: string, operations: Operation[]) {
+    this.operationLogTreeDataProvider.applyOperations(repositoryRoot, operations);
+  }
+
   dispose() {
     this.subscriptions.forEach((s) => s.dispose());
   }
@@ -59,21 +63,27 @@ export class OperationLogTreeDataProvider implements TreeDataProvider<unknown> {
     return this.operationTreeItems;
   }
 
-  async refresh(providedOperationId?: string) {
-    if (!this.selectedRepository) {
+  applyOperations(repositoryRoot: string, operations: Operation[]) {
+    if (this.selectedRepository?.repositoryRoot !== repositoryRoot) {
       return;
     }
-    const repo = this.selectedRepository;
-    const operationId = providedOperationId ?? (await repo.getLatestOperationId(false));
     const prev = this.operationTreeItems;
-    const operations = await repo.operationLog(operationId);
-    this.operationTreeItems = operations.map((op) => new OperationTreeItem(op, repo.repositoryRoot));
+    this.operationTreeItems = operations.map((op) => new OperationTreeItem(op, repositoryRoot));
     if (
       prev.length !== this.operationTreeItems.length ||
       !prev.every((op, i) => op.id === this.operationTreeItems[i].operation.id)
     ) {
       this._onDidChangeTreeData.fire();
     }
+  }
+
+  async refresh(providedOperationId?: string) {
+    if (!this.selectedRepository) {
+      return;
+    }
+    const repo = this.selectedRepository;
+    const operationId = providedOperationId ?? (await repo.getLatestOperationId(false));
+    this.applyOperations(repo.repositoryRoot, await repo.operationLog(operationId));
   }
 
   async setSelectedRepo(repo: JJRepository) {

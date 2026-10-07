@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
 import * as fs from "fs";
-import type { JJRepository, LogEntry, ParentRef } from "./repository";
-import { BookmarkBackwardsError, StaleWorkingCopyError } from "./errors";
+import type { ChangedSnapshot, GraphQuery, JJRepository, LogEntry, ParentRef } from "./repository";
+import { BookmarkBackwardsError } from "./errors";
 import { CancelledError } from "./process";
 import path from "path";
 import { showErrorMessage } from "./vscode-utils";
@@ -27,6 +27,7 @@ import {
 } from "./graph-protocol";
 import { classifyEdges, insertSyntheticNodes, getUniqueEntryId } from "./elided-edges";
 import { logger } from "./logger";
+import { currentWorkspaceFromEntries } from "./snapshot-status";
 import { getLogRevset, getElidedVisibleImmutableParents } from "./config";
 import { DEFAULT_LOG_LIMIT } from "./constants";
 import { SplitWebview } from "./split-webview";
@@ -65,6 +66,9 @@ export class JJGraphWebview implements vscode.WebviewViewProvider {
 
   private _onDidSwitchChange = new vscode.EventEmitter<JJRepository>();
   readonly onDidSwitchChange: vscode.Event<JJRepository> = this._onDidSwitchChange.event;
+
+  private lastSnapshot: ChangedSnapshot | undefined;
+  private refreshHandler: ((repo: JJRepository) => Promise<void>) | undefined;
 
   constructor(
     private readonly extensionUri: vscode.Uri,
@@ -826,6 +830,7 @@ export class JJGraphWebview implements vscode.WebviewViewProvider {
       this.panel.title = `JJ Graph (${path.basename(this.repository.repositoryRoot)})`;
     }
     if (prevRoot !== repo.repositoryRoot) {
+      this.lastSnapshot = undefined;
       await this.refresh();
     }
   }
@@ -881,13 +886,13 @@ export class JJGraphWebview implements vscode.WebviewViewProvider {
   public async enableElideImmutableCommits(): Promise<void> {
     this.elideOverride = true;
     await this.updateElidingContext();
-    await this.refresh();
+    await this.rerender();
   }
 
   public async disableElideImmutableCommits(): Promise<void> {
     this.elideOverride = false;
     await this.updateElidingContext();
-    await this.refresh();
+    await this.rerender();
   }
 
   public async resetElideOverride(): Promise<void> {
@@ -905,30 +910,58 @@ export class JJGraphWebview implements vscode.WebviewViewProvider {
     await vscode.commands.executeCommand("setContext", "jjGraphView.elidingActive", effectiveEliding);
   }
 
-  public async refresh(providedOperationId?: string) {
-    if (!this.panel || !this.repository) {
+  setRefreshHandler(handler: (repo: JJRepository) => Promise<void>): void {
+    this.refreshHandler = handler;
+  }
+
+  graphQueryFor(repositoryRoot: string): GraphQuery | undefined {
+    if (!this.panel || this.repository?.repositoryRoot !== repositoryRoot) {
+      return undefined;
+    }
+    const config = vscode.workspace.getConfiguration("jjx");
+    return {
+      revset: getLogRevset(),
+      limit: config.get<number>("logLimit") ?? DEFAULT_LOG_LIMIT,
+      includeFiles: config.get<boolean>("showChangedFiles") ?? false,
+    };
+  }
+
+  public async refresh() {
+    if (!this.panel || !this.repository || !this.refreshHandler) {
+      return;
+    }
+    await this.refreshHandler(this.repository);
+  }
+
+  public async applySnapshot(snapshot: ChangedSnapshot) {
+    this.lastSnapshot = snapshot;
+    await this.render();
+  }
+
+  public async rerender() {
+    await this.render();
+  }
+
+  public showStaleState() {
+    this.postMessageToWebview({ command: "showStaleState" });
+  }
+
+  public showErrorState() {
+    this.postMessageToWebview({ command: "showErrorState" });
+  }
+
+  private async render() {
+    const snapshot = this.lastSnapshot;
+    if (!this.panel || !this.repository || !snapshot) {
       return;
     }
 
     try {
-      const operationId = providedOperationId ?? (await this.repository.getLatestOperationId(false));
-      this.repository.resetAutoUpdateStaleAttempted();
+      const operationId = snapshot.operationId;
+      const rawEntries = snapshot.entries;
       const config = vscode.workspace.getConfiguration("jjx");
       const graphStyle = config.get<string>("graphStyle") || "full";
-
-      const logLimit = config.get<number>("logLimit") ?? DEFAULT_LOG_LIMIT;
       const showChangedFiles = config.get<boolean>("showChangedFiles") ?? false;
-      const logStart = performance.now();
-      const rawEntries = await this.repository.log(
-        getLogRevset(),
-        logLimit,
-        {
-          includeFiles: showChangedFiles,
-        },
-        operationId,
-      );
-      const logDuration = performance.now() - logStart;
-      logger.info(`jj log took ${logDuration.toFixed(1)}ms`);
       const elideImmutableCommits = this.getEffectiveEliding();
       const { edges, visibleIds, reachableVisibleFrom } = classifyEdges(rawEntries, {
         elideImmutableCommits,
@@ -1007,12 +1040,17 @@ export class JJGraphWebview implements vscode.WebviewViewProvider {
       const changeDoubleClickAction = config.get<string>("changeDoubleClickAction") || "edit";
 
       let currentWorkspace: string | undefined;
-      try {
-        currentWorkspace = await this.repository.getCurrentWorkspaceName(operationId);
-      } catch (error: unknown) {
-        logger.warn(
-          `Failed to determine the current workspace: ${error instanceof Error ? error.message : String(error)}`,
-        );
+      const workspace = currentWorkspaceFromEntries(rawEntries);
+      if (workspace.lookupNeeded) {
+        try {
+          currentWorkspace = await this.repository.getCurrentWorkspaceName(operationId);
+        } catch (error: unknown) {
+          logger.warn(
+            `Failed to determine the current workspace: ${error instanceof Error ? error.message : String(error)}`,
+          );
+        }
+      } else {
+        currentWorkspace = workspace.name;
       }
 
       const laneInfo = assignLanes(entriesWithSynthetics);
@@ -1032,25 +1070,8 @@ export class JJGraphWebview implements vscode.WebviewViewProvider {
         currentWorkspace,
       };
       this.postMessageToWebview(msg);
-      try {
-        await this.repository.getStatus(false, undefined, operationId);
-      } catch {
-        // best effort — don't let cache update failure affect the graph
-      }
     } catch (error) {
-      if (error instanceof StaleWorkingCopyError) {
-        const didAutoUpdate = await this.repository.tryAutoUpdateStale();
-        if (didAutoUpdate) {
-          await this.refresh();
-          return;
-        }
-        const msg: ExtensionToWebviewMessage = {
-          command: "showStaleState",
-        };
-        this.postMessageToWebview(msg);
-        return;
-      }
-      logger.error(`Failed to refresh graph: ${error instanceof Error ? error.message : String(error)}`);
+      logger.error(`Failed to render graph: ${error instanceof Error ? error.message : String(error)}`);
       this.postMessageToWebview({ command: "showErrorState" });
     }
   }

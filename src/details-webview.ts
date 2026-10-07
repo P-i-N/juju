@@ -87,12 +87,12 @@ export class DetailsWebview implements vscode.Disposable {
    * because metadata shown in the view (bookmarks, tags) can move between commits even
    * though the selected commit IDs are immutable.
    */
-  public refresh(): void {
+  public async refresh(): Promise<void> {
     if (this.selectionPanel) {
-      void this.syncPanel(this.selectionPanel, true);
+      await this.syncPanel(this.selectionPanel, true);
     }
     for (const detailsPanel of this.pinnedPanels) {
-      void this.syncPanel(detailsPanel, true);
+      await this.syncPanel(detailsPanel, true);
     }
   }
 

@@ -101,6 +101,7 @@ export class WorkspaceSourceControlManager {
   private errorResourceGroup: vscode.SourceControlResourceGroup | undefined;
 
   graphQueryProvider: ((repositoryRoot: string) => GraphQuery | undefined) | undefined;
+  snapshotConsumer: ((repositoryRoot: string, snapshot: ChangedSnapshot) => Promise<void>) | undefined;
 
   private _onDidRepoUpdate = new vscode.EventEmitter<{ repoSCM: RepositorySourceControlManager } & RepoUpdate>();
   readonly onDidRepoUpdate: vscode.Event<{ repoSCM: RepositorySourceControlManager } & RepoUpdate> =
@@ -279,6 +280,7 @@ export class WorkspaceSourceControlManager {
         jjConfigArgs,
         jjVersion,
         () => this.graphQueryProvider?.(repoRoot),
+        (snapshot) => this.snapshotConsumer?.(repoRoot, snapshot) ?? Promise.resolve(),
       );
       repoSCM.onDidUpdate(
         (e) => {
@@ -478,6 +480,7 @@ class RepositorySourceControlManager {
     jjConfigArgs: string[],
     jjVersion: JJVersion | undefined,
     private readonly getGraphQuery: () => GraphQuery | undefined,
+    private readonly consumeSnapshot: (snapshot: ChangedSnapshot) => Promise<void>,
   ) {
     this.repository = new JJRepository(repositoryRoot, jjPath, jjConfigArgs, jjVersion);
 
@@ -693,6 +696,14 @@ class RepositorySourceControlManager {
     this.operationId = snapshot.operationId;
     this._onDidUpdate.fire({ operationId: snapshot.operationId, snapshot });
 
+    try {
+      await this.consumeSnapshot(snapshot);
+    } catch (error) {
+      logger.error(`Failed to apply repository snapshot: ${error instanceof Error ? error.message : String(error)}`);
+    }
+    if (token.isCancellationRequested) {
+      return;
+    }
     await this.refreshUntrackedFiles(token);
   }
 

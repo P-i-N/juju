@@ -36,6 +36,20 @@ export function initInfrastructure(state: ExtensionState) {
   const detailsWebview = new DetailsWebview(context.extensionUri, graphWebview);
   context.subscriptions.push(detailsWebview);
 
+  graphWebview.setRefreshHandler(async (repo) => {
+    const repoSCM = state.workspaceSCM.getByRoot(repo.repositoryRoot);
+    if (!repoSCM) {
+      return;
+    }
+    try {
+      await repoSCM.checkForUpdates(undefined, "force");
+    } catch (error: unknown) {
+      logger.error(`Failed to refresh graph: ${error instanceof Error ? error.message : String(error)}`);
+      graphWebview.showErrorState();
+    }
+  });
+  state.workspaceSCM.graphQueryProvider = (repositoryRoot) => graphWebview.graphQueryFor(repositoryRoot);
+
   state.onDidSetSelectedRepository(
     async () => {
       const repo = state.getSelectedRepo();
@@ -71,8 +85,8 @@ export function initInfrastructure(state: ExtensionState) {
   );
 
   context.subscriptions.push(
-    graphWebview.onDidSwitchChange(async (repo) => {
-      await state.workspaceSCM.getByRoot(repo.repositoryRoot)?.checkForUpdates(undefined, "force");
+    graphWebview.onDidSwitchChange(async () => {
+      await graphWebview.refresh();
     }),
   );
 
@@ -91,14 +105,19 @@ export function initInfrastructure(state: ExtensionState) {
     context.subscriptions,
   );
 
+  state.workspaceSCM.snapshotConsumer = async (repositoryRoot, snapshot) => {
+    operationLogManager.applyOperations(repositoryRoot, snapshot.operations);
+    if (graphWebview.repository?.repositoryRoot !== repositoryRoot || !snapshot.graphLoaded) {
+      return;
+    }
+    await graphWebview.applySnapshot(snapshot);
+    await detailsWebview.refresh();
+  };
+
   context.subscriptions.push(
-    state.workspaceSCM.onDidRepoUpdate(({ repoSCM, operationId }) => {
-      const opLogRepo = operationLogManager.operationLogTreeDataProvider.getSelectedRepo();
-      if (opLogRepo && opLogRepo.repositoryRoot === repoSCM.repositoryRoot) {
-        void operationLogManager.refresh(operationId);
-      }
-      if (graphWebview.repository && graphWebview.repository.repositoryRoot === repoSCM.repositoryRoot) {
-        void graphWebview.refresh(operationId).then(() => detailsWebview.refresh());
+    state.workspaceSCM.onDidRepoUpdate(({ repoSCM, stale }) => {
+      if (stale && graphWebview.repository?.repositoryRoot === repoSCM.repositoryRoot) {
+        graphWebview.showStaleState();
       }
     }),
   );
@@ -217,7 +236,11 @@ export function createPolling(
           if (e.affectsConfiguration("jjx.elideImmutableCommits")) {
             await state.graphWebview.resetElideOverride();
           }
-          await state.graphWebview.refresh();
+          if (e.affectsConfiguration("jjx.logLimit") || e.affectsConfiguration("jjx.showChangedFiles")) {
+            await state.graphWebview.refresh();
+          } else {
+            await state.graphWebview.rerender();
+          }
         }
       }
     },
