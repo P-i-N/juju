@@ -1136,6 +1136,8 @@ export class JJRepository {
       await colocatedPromise,
     );
 
+    await this.ignoreGitRemoteInSyncStatus(entry);
+
     const { fileStatuses } = this.parseFileStatuses(entry.diff_files ?? [], entry.conflicted_files ?? []);
     const lineCounts = parseGitDiffLineCounts(
       (await this.jjCommandRead(["diff", "-r", commitId, "--git"], { token })).toString(),
@@ -1266,6 +1268,27 @@ export class JJRepository {
       throw new Error(`Failed to push bookmark "${bookmark}":\n${failedRemoteErrors.join("\n")}`);
     }
     return pushedRemotes;
+  }
+
+  /**
+   * jj's `synced()` also compares against the `git` pseudo-remote, which can lag behind in
+   * non-colocated workspaces even after a push. Recomputes it from the real remotes only.
+   */
+  private async ignoreGitRemoteInSyncStatus(entry: LogEntry): Promise<void> {
+    const unsyncedBookmarks = entry.local_bookmarks.filter((b) => !b.synced && !b.conflict);
+    if (unsyncedBookmarks.length > 0) {
+      const withUnsyncedRemotes = await this.getBookmarksWithUnsyncedNonGitRemotes();
+      for (const b of unsyncedBookmarks) {
+        b.synced = !withUnsyncedRemotes.has(b.name);
+      }
+    }
+    const unsyncedTags = this.supportsTagTracking() ? entry.local_tags.filter((t) => !t.synced && !t.conflict) : [];
+    if (unsyncedTags.length > 0) {
+      const withUnsyncedRemotes = await this.getTagsWithUnsyncedNonGitRemotes();
+      for (const t of unsyncedTags) {
+        t.synced = !withUnsyncedRemotes.has(t.name);
+      }
+    }
   }
 
   async getBookmarksWithUnsyncedNonGitRemotes(operationId?: string): Promise<Set<string>> {

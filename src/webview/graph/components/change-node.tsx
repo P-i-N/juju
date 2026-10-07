@@ -391,7 +391,6 @@ const MemoizedChangeNodeTextContent = memo(function ChangeNodeTextContent({
           >
             {!b.synced &&
               !b.conflict &&
-              b.showPushButton !== false &&
               (pushingBookmarks.value.has(b.name) ? (
                 <BookmarkPushIcon pushing={true} title="Pushing..." />
               ) : (
@@ -495,8 +494,7 @@ const MemoizedChangeNodeTextContent = memo(function ChangeNodeTextContent({
               });
             }}
           >
-            {(pushingTags.value.has(t.name) ||
-              (supportsTagTracking.value && !t.synced && !t.conflict && t.showPushButton !== false)) &&
+            {(pushingTags.value.has(t.name) || (supportsTagTracking.value && !t.synced && !t.conflict)) &&
               (pushingTags.value.has(t.name) ? (
                 <BookmarkPushIcon pushing={true} title="Pushing..." />
               ) : (

@@ -1032,7 +1032,7 @@ export class JJGraphWebview implements vscode.WebviewViewProvider {
           }
           for (const b of change.localBookmarks) {
             if (!b.synced && !b.conflict) {
-              b.showPushButton = bookmarksWithPushTargets.has(b.name);
+              b.synced = !bookmarksWithPushTargets.has(b.name);
             }
           }
         }
@@ -1059,7 +1059,7 @@ export class JJGraphWebview implements vscode.WebviewViewProvider {
             }
             for (const t of change.localTags) {
               if (!t.synced && !t.conflict) {
-                t.showPushButton = tagsWithPushTargets.has(t.name);
+                t.synced = !tagsWithPushTargets.has(t.name);
               }
             }
           }
