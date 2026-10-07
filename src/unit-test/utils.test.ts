@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-floating-promises */
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import path from "node:path";
 import {
   decodeFileText,
   filepathToFileset,
@@ -12,10 +13,12 @@ import {
   formatDiffTitle,
   formatWorkingCopyLabel,
   formatWorkingCopyTitle,
+  hideStaleGitRemoteRefs,
+  isColocatedGitRoot,
   remapPathSpelling,
   shouldOpenWorkingCopyRightSide,
 } from "../utils";
-import type { FullChangeId } from "../types";
+import type { FullChangeId, RealPath } from "../types";
 
 describe("filepathToFileset Test Suite", () => {
   it("wraps a plain path in an exact-file fileset", () => {
@@ -252,5 +255,49 @@ describe("decodeFileText Test Suite", () => {
 
   it("returns undefined for content with invalid UTF-8 sequences", () => {
     assert.equal(decodeFileText(Buffer.from([0xc3, 0x28])), undefined);
+  });
+});
+
+describe("isColocatedGitRoot Test Suite", () => {
+  const workspaceRoot = path.join(path.sep, "work", "repo") as RealPath;
+
+  it("treats the .git directory of the workspace as colocated", () => {
+    assert.equal(isColocatedGitRoot(path.join(workspaceRoot, ".git"), workspaceRoot), true);
+  });
+
+  it("treats the internal Git repository of jj as not colocated", () => {
+    assert.equal(isColocatedGitRoot(path.join(workspaceRoot, ".jj", "repo", "store", "git"), workspaceRoot), false);
+  });
+
+  it("treats the .git directory of another workspace as not colocated", () => {
+    assert.equal(isColocatedGitRoot(path.join(path.sep, "work", "main", ".git"), workspaceRoot), false);
+  });
+});
+
+describe("hideStaleGitRemoteRefs Test Suite", () => {
+  const entries = [
+    {
+      remote_bookmarks: [
+        { name: "main", remote: "git" },
+        { name: "main", remote: "origin" },
+      ],
+      remote_tags: [
+        { name: "v1", remote: "git" },
+        { name: "v1", remote: "upstream" },
+      ],
+    },
+  ];
+
+  it("keeps the refs of the git remote in colocated workspaces", () => {
+    assert.deepEqual(hideStaleGitRemoteRefs(entries, true), entries);
+  });
+
+  it("drops the refs of the git remote in non-colocated workspaces", () => {
+    assert.deepEqual(hideStaleGitRemoteRefs(entries, false), [
+      {
+        remote_bookmarks: [{ name: "main", remote: "origin" }],
+        remote_tags: [{ name: "v1", remote: "upstream" }],
+      },
+    ]);
   });
 });

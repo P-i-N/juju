@@ -41,6 +41,8 @@ import {
   filepathToRootFileset,
   formatChangeIdShort,
   formatWorkingCopyTitle,
+  hideStaleGitRemoteRefs,
+  isColocatedGitRoot,
   maxChangeIdPrefixLength,
   normalizePath,
   pathEquals,
@@ -143,6 +145,7 @@ export class JJRepository {
   gitFetchPromise: Promise<ProcessOutput> | undefined;
   private autoUpdateStaleAttempted = false;
   private _gitDirPromise: Promise<string> | undefined;
+  private colocatedMemo: { operationId: string | undefined; promise: Promise<boolean> } | undefined;
 
   // Latest operation id observed for this repository
   private lastKnownOperationId: string | undefined;
@@ -176,6 +179,21 @@ export class JJRepository {
       this._gitDirPromise = this.jjCommandRead(["git", "root"]).then((buf) => buf.toString().trim());
     }
     return this._gitDirPromise;
+  }
+
+  /**
+   * Whether the workspace is colocated with its Git repository. Memoized per operation because
+   * colocation can be enabled or disabled while the extension is running.
+   */
+  private isColocated(operationId = this.lastKnownOperationId): Promise<boolean> {
+    if (!this.colocatedMemo || this.colocatedMemo.operationId !== operationId) {
+      const promise = this.jjCommandRead(["git", "root"], undefined, operationId).then(
+        (buf) => isColocatedGitRoot(buf.toString().trim(), this.repositoryRoot),
+        () => false,
+      );
+      this.colocatedMemo = { operationId, promise };
+    }
+    return this.colocatedMemo.promise;
   }
 
   private refCancellationKey(refType: "bookmark" | "tag", name: string): string {
@@ -416,22 +434,25 @@ export class JJRepository {
     const revsetArgs = request.graph
       ? ["-r", `(${request.graph.revset}) | @ | parents(@)`, "-n", request.graph.limit.toString()]
       : ["-r", "@ | parents(@)"];
-    const entries = this.parseLogEntries(
-      (await this.jjCommandRead(["log", ...revsetArgs, "-T", template], { token }, operationId)).toString(),
-      includeFiles,
-    );
+    const colocatedPromise = this.isColocated(operationId);
+    const logOutput = await this.jjCommandRead(["log", ...revsetArgs, "-T", template], { token }, operationId);
+    const colocated = await colocatedPromise;
+    const entries = hideStaleGitRemoteRefs(this.parseLogEntries(logOutput.toString(), includeFiles), colocated);
 
     let fallbackEntries: LogEntry[] = [];
     if (needsWorkingCopyFallback(entries)) {
-      fallbackEntries = this.parseLogEntries(
-        (
-          await this.jjCommandRead(
-            ["log", "-r", "@ | parents(@)", "--no-graph", "-T", template],
-            { token },
-            operationId,
-          )
-        ).toString(),
-        includeFiles,
+      fallbackEntries = hideStaleGitRemoteRefs(
+        this.parseLogEntries(
+          (
+            await this.jjCommandRead(
+              ["log", "-r", "@ | parents(@)", "--no-graph", "-T", template],
+              { token },
+              operationId,
+            )
+          ).toString(),
+          includeFiles,
+        ),
+        colocated,
       );
     }
 
@@ -1086,6 +1107,7 @@ export class JJRepository {
    * content, so the data stays valid (and consistent) even while the change is rewritten.
    */
   async getChangeDetails(commitId: string, token?: vscode.CancellationToken): Promise<ChangeDetails> {
+    const colocatedPromise = this.isColocated();
     const output = (
       await this.jjCommandRead(["log", "-r", commitId, "-n", "1", "--no-graph", "-T", buildDetailsTemplate()], {
         token,
@@ -1096,11 +1118,16 @@ export class JJRepository {
       throw new Error("No output from jj log. Maybe the revision couldn't be found?");
     }
 
-    const entry = JSON.parse(output.trim()) as LogEntry & {
-      files_changed: number;
-      total_added: number;
-      total_removed: number;
-    };
+    const [entry] = hideStaleGitRemoteRefs(
+      [
+        JSON.parse(output.trim()) as LogEntry & {
+          files_changed: number;
+          total_added: number;
+          total_removed: number;
+        },
+      ],
+      await colocatedPromise,
+    );
 
     const { fileStatuses } = this.parseFileStatuses(entry.diff_files ?? [], entry.conflicted_files ?? []);
     const lineCounts = parseGitDiffLineCounts(

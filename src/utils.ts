@@ -1,6 +1,6 @@
-import { basename, isAbsolute, join, relative, sep } from "path";
+import { basename, isAbsolute, join, normalize, relative, sep } from "path";
 
-import type { ChangeId, FileStatusType, FullChangeId, NormalizedPath, RealPath } from "./types";
+import type { ChangeId, FileStatusType, FullChangeId, LogEntryRemoteRef, NormalizedPath, RealPath } from "./types";
 
 export function fullChangeIdFromString(value: string): FullChangeId {
   return value as FullChangeId;
@@ -176,6 +176,32 @@ export function isDescendant(parent: string, descendant: string): boolean {
 
 export function pathEquals(a: RealPath, b: RealPath): boolean {
   return normalizePath(a) === normalizePath(b);
+}
+
+/**
+ * Whether `jj git root` reports the `.git` directory of the workspace itself, which is how jj
+ * defines a colocated workspace. Otherwise the Git repository is internal to jj (or external),
+ * and jj does not keep its refs (the `git` remote) in sync with the local bookmarks and tags.
+ */
+export function isColocatedGitRoot(gitRoot: string, workspaceRoot: RealPath): boolean {
+  return pathEquals(normalize(gitRoot) as RealPath, join(workspaceRoot, ".git") as RealPath);
+}
+
+/**
+ * Drops the refs of the `git` pseudo-remote unless the workspace is colocated. In non-colocated
+ * workspaces they are stale leftovers of the internal Git repository that cannot be acted upon.
+ */
+export function hideStaleGitRemoteRefs<
+  T extends { remote_bookmarks: LogEntryRemoteRef[]; remote_tags: LogEntryRemoteRef[] },
+>(entries: T[], colocated: boolean): T[] {
+  if (colocated) {
+    return entries;
+  }
+  return entries.map((entry) => ({
+    ...entry,
+    remote_bookmarks: entry.remote_bookmarks.filter((ref) => ref.remote !== "git"),
+    remote_tags: entry.remote_tags.filter((ref) => ref.remote !== "git"),
+  }));
 }
 
 export interface PathSpellingMapping {
