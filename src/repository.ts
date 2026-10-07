@@ -9,6 +9,7 @@ import {
   buildLogTemplate,
   buildDetailsTemplate,
   buildOperationTemplate,
+  buildSnapshotLogTemplate,
   DIFF_STATS_TEMPLATE,
   BOOKMARK_TRACKING_INFO_TEMPLATE,
   REMOTE_REF_STATUS_TEMPLATE,
@@ -60,6 +61,7 @@ import {
 } from "./jj-editor";
 import { TIMEOUTS, type JJVersion, versionAtLeast, JJ_VERSION_WITH_TAG_TRACKING } from "./constants";
 import { withDivergenceHandling } from "./divergence-handling";
+import { hasMissingParents } from "./snapshot-status";
 import { joinRepositoryPath, resolveRepositoryPath, repositoryRelativePath, toWorkspaceUri } from "./workspace-paths";
 import type {
   FileStatus,
@@ -105,6 +107,30 @@ export type {
   DiffFileEntry,
   SplitFileEntry,
 };
+
+export type GraphQuery = { revset: string; limit: number; includeFiles: boolean };
+export type SnapshotRequest = {
+  previousOperationId: string | undefined;
+  force: boolean;
+  graph: GraphQuery | undefined;
+};
+export type ChangedSnapshot = {
+  changed: true;
+  operationId: string;
+  operations: Operation[];
+  entries: LogEntry[];
+  missingParentEntries: LogEntry[];
+  graphLoaded: boolean;
+};
+export type RepositorySnapshot = { changed: false; operationId: string } | ChangedSnapshot;
+
+function parseOperations(output: string): Operation[] {
+  return output
+    .trim()
+    .split("\n")
+    .filter((line) => line.trim())
+    .map((line) => JSON.parse(line) as Operation);
+}
 
 export interface WorkspaceInfo {
   name: string;
@@ -366,6 +392,55 @@ export class JJRepository {
     const operationId = buf.toString().trim();
     this.lastKnownOperationId = operationId;
     return operationId;
+  }
+
+  async loadSnapshot(request: SnapshotRequest, token?: vscode.CancellationToken): Promise<RepositorySnapshot> {
+    const opLogArgs = ["operation", "log", "--limit", "10", "--no-graph", "-T", buildOperationTemplate(this.jjVersion)];
+    const opLogOutput = await withDivergenceHandling(
+      () => handleJJCommand(this.spawnJJ(["--at-operation=@", ...opLogArgs], { cwd: this.repositoryRoot }), token),
+      () => handleJJCommand(this.spawnJJ(opLogArgs, { cwd: this.repositoryRoot }), token),
+      (maxDelayMs) => this.jitteredDelay(maxDelayMs, token),
+    );
+    const operations = parseOperations(opLogOutput.toString());
+    const operationId = operations[0]?.id;
+    if (!operationId) {
+      throw new Error("jj operation log returned no operations.");
+    }
+    this.lastKnownOperationId = operationId;
+    if (!request.force && operationId === request.previousOperationId) {
+      return { changed: false, operationId };
+    }
+
+    const includeFiles = request.graph?.includeFiles ?? false;
+    const template = buildSnapshotLogTemplate({ includeFilesForAll: includeFiles });
+    const revsetArgs = request.graph
+      ? ["-r", `(${request.graph.revset}) | @ | parents(@)`, "-n", request.graph.limit.toString()]
+      : ["-r", "@ | parents(@)"];
+    const entries = this.parseLogEntries(
+      (
+        await this.jjCommandRead(["log", ...revsetArgs, "--no-graph", "-T", template], { token }, operationId)
+      ).toString(),
+      includeFiles,
+    );
+
+    let missingParentEntries: LogEntry[] = [];
+    if (hasMissingParents(entries)) {
+      missingParentEntries = this.parseLogEntries(
+        (
+          await this.jjCommandRead(["log", "-r", "parents(@)", "--no-graph", "-T", template], { token }, operationId)
+        ).toString(),
+        includeFiles,
+      );
+    }
+
+    return {
+      changed: true,
+      operationId,
+      operations,
+      entries,
+      missingParentEntries,
+      graphLoaded: request.graph !== undefined,
+    };
   }
 
   async getStatus(useCache = false, token?: vscode.CancellationToken, operationId?: string): Promise<RepositoryStatus> {
@@ -972,6 +1047,27 @@ export class JJRepository {
     await jjExit;
   }
 
+  private parseLogEntries(output: string, includeFiles: boolean): LogEntry[] {
+    const entries: LogEntry[] = [];
+    for (const line of output.trim().split("\n")) {
+      const jsonStart = line.indexOf("{");
+      if (jsonStart === -1) {
+        continue;
+      }
+      entries.push(JSON.parse(line.slice(jsonStart)) as LogEntry);
+    }
+    if (includeFiles) {
+      for (const entry of entries) {
+        entry.fileStatuses = parseFileStatuses(
+          entry.diff_files ?? [],
+          entry.conflicted_files ?? [],
+          this.repositoryRoot,
+        ).fileStatuses;
+      }
+    }
+    return entries;
+  }
+
   async log(
     rev: string,
     limit: number = 100,
@@ -982,31 +1078,7 @@ export class JJRepository {
     const output = (
       await this.jjCommandRead(["log", "-r", rev, "-n", limit.toString(), "-T", template], undefined, operationId)
     ).toString();
-
-    if (!output.trim()) {
-      return [];
-    }
-
-    const entries: LogEntry[] = [];
-    for (const line of output.trim().split("\n")) {
-      const jsonStart = line.indexOf("{");
-      if (jsonStart === -1) {
-        continue;
-      }
-      entries.push(JSON.parse(line.slice(jsonStart)) as LogEntry);
-    }
-
-    if (opts?.includeFiles) {
-      for (const entry of entries) {
-        entry.fileStatuses = parseFileStatuses(
-          entry.diff_files ?? [],
-          entry.conflicted_files ?? [],
-          this.repositoryRoot,
-        ).fileStatuses;
-      }
-    }
-
-    return entries;
+    return this.parseLogEntries(output, opts?.includeFiles ?? false);
   }
 
   /**
@@ -1892,15 +1964,7 @@ export class JJRepository {
       )
     ).toString();
 
-    const ret: Operation[] = [];
-    for (const line of output.trim().split("\n")) {
-      if (!line.trim()) {
-        continue;
-      }
-      ret.push(JSON.parse(line) as Operation);
-    }
-
-    return ret;
+    return parseOperations(output);
   }
 
   async operationRevert(id: string) {
