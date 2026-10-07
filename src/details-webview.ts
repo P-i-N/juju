@@ -42,10 +42,10 @@ export class DetailsWebview implements vscode.Disposable {
     private readonly graphWebview: JJGraphWebview,
   ) {
     this.disposables.push(
-      graphWebview.onDidChangeSelection((selection) => {
+      graphWebview.onDidChangeSelection(async (selection) => {
         this.selection = selection;
         if (this.selectionPanel) {
-          void this.syncPanel(this.selectionPanel, false);
+          await this.syncPanel(this.selectionPanel, false);
         }
       }),
     );

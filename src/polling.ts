@@ -6,6 +6,7 @@ import { JJGraphWebview } from "./graph-webview";
 import { DetailsWebview } from "./details-webview";
 import type { ExtensionState } from "./extension-state";
 import type { ForceRefresh } from "./source-control";
+import { StaleWorkingCopyError } from "./errors";
 
 function syncSelectedRepoToActiveEditor(state: ExtensionState) {
   if (!vscode.workspace.getConfiguration("jjx").get<boolean>("autoSwitchRepository")) {
@@ -44,6 +45,9 @@ export function initInfrastructure(state: ExtensionState) {
     try {
       await repoSCM.checkForUpdates(undefined, "force");
     } catch (error: unknown) {
+      if (error instanceof StaleWorkingCopyError) {
+        return;
+      }
       logger.error(`Failed to refresh graph: ${error instanceof Error ? error.message : String(error)}`);
       graphWebview.showErrorState();
     }

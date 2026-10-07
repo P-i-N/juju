@@ -61,8 +61,14 @@ export class JJGraphWebview implements vscode.WebviewViewProvider {
   private readonly splitWebview: SplitWebview;
   private lastFiredSelection: GraphSelection[] = [];
 
-  private _onDidChangeSelection = new vscode.EventEmitter<GraphSelection[]>();
-  readonly onDidChangeSelection: vscode.Event<GraphSelection[]> = this._onDidChangeSelection.event;
+  private selectionHandlers: ((selection: GraphSelection[]) => Promise<void> | void)[] = [];
+
+  onDidChangeSelection(handler: (selection: GraphSelection[]) => Promise<void> | void): vscode.Disposable {
+    this.selectionHandlers.push(handler);
+    return new vscode.Disposable(() => {
+      this.selectionHandlers = this.selectionHandlers.filter((h) => h !== handler);
+    });
+  }
 
   private _onDidSwitchChange = new vscode.EventEmitter<JJRepository>();
   readonly onDidSwitchChange: vscode.Event<JJRepository> = this._onDidSwitchChange.event;
@@ -168,7 +174,7 @@ export class JJGraphWebview implements vscode.WebviewViewProvider {
           const selectedIds = message.selectedNodes.filter((id) => this.findRegularChange(id));
           this.selectedNodes = new Set(selectedIds);
           vscode.commands.executeCommand("setContext", "jjGraphView.nodesSelected", selectedIds.length);
-          this.fireSelection(this.resolveSelection(selectedIds));
+          void this.fireSelection(this.resolveSelection(selectedIds));
           break;
         }
         case "openDetailsView":
@@ -804,7 +810,7 @@ export class JJGraphWebview implements vscode.WebviewViewProvider {
    * unchanged. Selections are compared by change ID *and* commit ID: a refresh that kept the
    * same changes selected but rewrote them (new commit IDs) counts as a change.
    */
-  private fireSelection(selection: GraphSelection[]): void {
+  private async fireSelection(selection: GraphSelection[]): Promise<void> {
     const unchanged =
       selection.length === this.lastFiredSelection.length &&
       selection.every(
@@ -816,7 +822,13 @@ export class JJGraphWebview implements vscode.WebviewViewProvider {
       return;
     }
     this.lastFiredSelection = selection;
-    this._onDidChangeSelection.fire(selection);
+    for (const handler of [...this.selectionHandlers]) {
+      try {
+        await handler(selection);
+      } catch (error) {
+        logger.error(`Selection handler failed: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
   }
 
   private postMessageToWebview(message: ExtensionToWebviewMessage): Thenable<boolean | undefined> | undefined {
@@ -1036,7 +1048,7 @@ export class JJGraphWebview implements vscode.WebviewViewProvider {
       // Notify listeners whenever the resolved selection changed: selected changes may have
       // been removed (e.g. abandoned) or rewritten (same change ID, new commit ID), and both
       // the SCM view and the Details view must follow.
-      this.fireSelection(this.resolveSelection(Array.from(this.selectedNodes)));
+      await this.fireSelection(this.resolveSelection(Array.from(this.selectedNodes)));
       const changeDoubleClickAction = config.get<string>("changeDoubleClickAction") || "edit";
 
       let currentWorkspace: string | undefined;
