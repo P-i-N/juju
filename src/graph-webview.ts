@@ -63,6 +63,9 @@ export class JJGraphWebview implements vscode.WebviewViewProvider {
   private _onDidChangeSelection = new vscode.EventEmitter<GraphSelection[]>();
   readonly onDidChangeSelection: vscode.Event<GraphSelection[]> = this._onDidChangeSelection.event;
 
+  private _onDidSwitchChange = new vscode.EventEmitter<JJRepository>();
+  readonly onDidSwitchChange: vscode.Event<JJRepository> = this._onDidSwitchChange.event;
+
   constructor(
     private readonly extensionUri: vscode.Uri,
     repo: JJRepository | undefined,
@@ -133,6 +136,7 @@ export class JJGraphWebview implements vscode.WebviewViewProvider {
               }
               await repo.editRetryImmutable(message.changeId);
             }
+            this._onDidSwitchChange.fire(repo);
           } catch (error: unknown) {
             showErrorMessage("Failed to switch to change", error);
           }
@@ -147,6 +151,7 @@ export class JJGraphWebview implements vscode.WebviewViewProvider {
               return;
             }
             await repo.editRetryImmutable(message.changeId);
+            this._onDidSwitchChange.fire(repo);
           } catch (error: unknown) {
             showErrorMessage("Failed to switch to change", error);
           }

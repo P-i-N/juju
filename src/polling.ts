@@ -70,6 +70,12 @@ export function initInfrastructure(state: ExtensionState) {
     }),
   );
 
+  context.subscriptions.push(
+    graphWebview.onDidSwitchChange(async (repo) => {
+      await state.workspaceSCM.getByRoot(repo.repositoryRoot)?.checkForUpdates(undefined, "force");
+    }),
+  );
+
   const operationLogTreeDataProvider = new OperationLogTreeDataProvider(initialSelectedRepo);
   const operationLogManager = new OperationLogManager(operationLogTreeDataProvider);
   context.subscriptions.push(operationLogManager);
