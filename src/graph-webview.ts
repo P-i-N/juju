@@ -100,7 +100,10 @@ export class JJGraphWebview implements vscode.WebviewViewProvider {
         },
       }),
       vscode.window.registerWebviewPanelSerializer(GRAPH_TAB_VIEW_TYPE, {
-        deserializeWebviewPanel: (panel) => this.restoreTab(panel),
+        deserializeWebviewPanel: (panel) => {
+          this.restoreTab(panel);
+          return Promise.resolve();
+        },
       }),
     );
   }
@@ -170,12 +173,12 @@ export class JJGraphWebview implements vscode.WebviewViewProvider {
     void this.attachTab(panel);
   }
 
-  private async restoreTab(panel: vscode.WebviewPanel): Promise<void> {
+  private restoreTab(panel: vscode.WebviewPanel): void {
     if (this.tab) {
       panel.dispose();
       return;
     }
-    await this.attachTab(panel);
+    void this.attachTab(panel);
   }
 
   private async attachTab(panel: vscode.WebviewPanel): Promise<void> {
@@ -187,6 +190,7 @@ export class JJGraphWebview implements vscode.WebviewViewProvider {
     });
     try {
       await this.attachSurface(panel);
+      await this.updateElidingContext();
       await this.refresh();
     } catch (error: unknown) {
       showErrorMessage("Failed to open graph tab", error);

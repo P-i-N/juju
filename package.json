@@ -359,7 +359,7 @@
         },
         {
           "command": "jj.toggleDiffView",
-          "when": "jj.reposExist && !jj.comparisonDiffActive && !jj.diffModifiedDeleted",
+          "when": "jj.reposExist && !jj.comparisonDiffActive && !jj.diffModifiedDeleted && activeWebviewPanelId != 'jjGraphTab'",
           "group": "navigation@1"
         },
         {
@@ -369,12 +369,12 @@
         },
         {
           "command": "jj.openParentChange",
-          "when": "jj.reposExist && !jj.comparisonDiffActive",
+          "when": "jj.reposExist && !jj.comparisonDiffActive && activeWebviewPanelId != 'jjGraphTab'",
           "group": "navigation@2"
         },
         {
           "command": "jj.openChildChange",
-          "when": "jj.reposExist && !jj.comparisonDiffActive",
+          "when": "jj.reposExist && !jj.comparisonDiffActive && activeWebviewPanelId != 'jjGraphTab'",
           "group": "navigation@3"
         },
         {

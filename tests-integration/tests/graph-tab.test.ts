@@ -1,5 +1,5 @@
 import type { Frame, Page } from "@playwright/test";
-import { test, expect, mod, runCommand } from "./base-test";
+import { test, expect, runCommand } from "./base-test";
 
 async function findOtherGraphFrame(workbox: Page, sidebarFrame: Frame): Promise<Frame> {
   let found: Frame | undefined;
@@ -58,7 +58,7 @@ test("graph tab mirrors the sidebar graph", async ({ graphFrame, testRepo, workb
   await test.step("closing the tab leaves the sidebar graph working", async () => {
     const graphTab = workbox.locator(".tab", { hasText: "JJ Graph" });
     await expect(graphTab).toHaveCount(1);
-    await workbox.keyboard.press(`${mod}+w`);
+    await runCommand(workbox, "View: Close Editor");
     await expect(graphTab).toHaveCount(0);
     await sidebarNodes.nth(1).click();
     await expect(sidebarNodes.nth(1)).toHaveAttribute("data-selected");
