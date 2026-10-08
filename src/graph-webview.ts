@@ -48,13 +48,16 @@ export interface GraphSelection {
 }
 
 type Message = WebviewToExtensionMessage;
+type GraphSurface = vscode.WebviewView | vscode.WebviewPanel;
+type UpdateGraphMessage = Extract<ExtensionToWebviewMessage, { command: "updateGraph" }>;
 
 export class JJGraphWebview implements vscode.WebviewViewProvider {
   subscriptions: {
     dispose(): unknown;
   }[] = [];
 
-  public panel?: vscode.WebviewView;
+  private readonly surfaces = new Set<GraphSurface>();
+  private lastGraphMessage: UpdateGraphMessage | undefined;
   public repository: JJRepository | undefined;
   public selectedNodes: Set<FullChangeId> = new Set();
   private currentChanges: ChangeNode[] = [];
@@ -98,711 +101,734 @@ export class JJGraphWebview implements vscode.WebviewViewProvider {
   }
 
   public async resolveWebviewView(webviewView: vscode.WebviewView): Promise<void> {
-    this.panel = webviewView;
-    this.panel.title = this.repository ? `JJ Graph (${path.basename(this.repository.repositoryRoot)})` : "JJ Graph";
+    await this.attachSurface(webviewView);
+    await this.updateElidingContext();
+    await this.refresh();
+  }
 
-    webviewView.webview.options = {
+  private async attachSurface(surface: GraphSurface): Promise<void> {
+    this.surfaces.add(surface);
+    surface.onDidDispose(() => this.surfaces.delete(surface));
+    surface.title = this.surfaceTitle();
+
+    surface.webview.options = {
       enableScripts: true,
       localResourceRoots: [this.extensionUri],
     };
 
-    webviewView.webview.html = this.getWebviewContent(webviewView.webview);
+    surface.webview.html = this.getWebviewContent(surface.webview);
 
     await new Promise<void>((resolve) => {
-      const messageListener = webviewView.webview.onDidReceiveMessage((message: Message) => {
-        if (message.command === "webviewReady") {
-          messageListener.dispose();
-          resolve();
+      const listeners: vscode.Disposable[] = [];
+      const done = () => {
+        for (const listener of listeners) {
+          listener.dispose();
         }
-      });
+        resolve();
+      };
+      listeners.push(
+        surface.webview.onDidReceiveMessage((message: Message) => {
+          if (message.command === "webviewReady") {
+            done();
+          }
+        }),
+      );
+      listeners.push(surface.onDidDispose(done));
     });
+
+    if (!this.surfaces.has(surface)) {
+      return;
+    }
 
     if (!this.repository) {
       const msg: ExtensionToWebviewMessage = this.jjBinaryNotFound
         ? { command: "showJJNotFoundState" }
         : { command: "showNoRepoFoundState" };
-      this.postMessageToWebview(msg);
+      this.postMessageToSurface(surface, msg);
     }
 
-    webviewView.webview.onDidReceiveMessage(async (message: Message) => {
-      if (
-        !this.repository &&
-        message.command !== "selectChange" &&
-        message.command !== "openDetailsView" &&
-        message.command !== "reportError" &&
-        message.command !== "showWarning"
-      ) {
-        return;
-      }
-      const repo = this.repository!;
-      switch (message.command) {
-        case "editChange":
-          try {
-            const change = this.findRegularChange(message.changeId);
-            if (!change) {
-              return;
-            }
-            const config = vscode.workspace.getConfiguration("juju");
-            const changeDoubleClickAction =
-              config.get<string>("changeDoubleClickAction") || DEFAULT_CHANGE_DOUBLE_CLICK_ACTION;
-            const action = resolveDoubleClickAction(
-              { ...change, changeId: change.id.changeId },
-              changeDoubleClickAction,
-            );
-            if (action === "new") {
-              await repo.new(undefined, [message.changeId]);
-            } else if (action === "edit") {
-              await repo.editRetryImmutable(message.changeId);
-            } else {
-              return;
-            }
-            this._onDidSwitchChange.fire();
-          } catch (error: unknown) {
-            showErrorMessage("Failed to switch to change", error);
-          }
-          break;
-        case "editChangeDirect":
-          try {
-            if (message.changeId === rootChangeId) {
-              return;
-            }
-            const status = await repo.getStatus(true);
-            if (message.changeId === status.workingCopy.changeId.changeId) {
-              return;
-            }
-            await repo.editRetryImmutable(message.changeId);
-            this._onDidSwitchChange.fire();
-          } catch (error: unknown) {
-            showErrorMessage("Failed to switch to change", error);
-          }
-          break;
-        case "newChildChange":
-          await this.withRefresh("create new child change", () => repo.new(undefined, message.changeIds));
-          break;
-        case "insertNewChange":
-          await this.withRefresh("insert new change", () =>
-            repo.newAtRetryImmutable(message.changeId, message.position),
-          );
-          break;
-        case "selectChange": {
-          // Elided ("~") nodes can never be selected.
-          const selectedIds = message.selectedNodes.filter((id) => this.findRegularChange(id));
-          this.selectedNodes = new Set(selectedIds);
-          vscode.commands.executeCommand("setContext", "jjGraphView.nodesSelected", selectedIds.length);
-          void this.fireSelection(this.resolveSelection(selectedIds));
-          break;
-        }
-        case "openDetailsView":
-          await vscode.commands.executeCommand("jj.openDetailsWebview");
-          break;
-        case "showChangeDetails": {
+    surface.webview.onDidReceiveMessage((message: Message) => this.handleMessage(message, surface));
+
+    this.replayTo(surface);
+  }
+
+  private replayTo(surface: GraphSurface): void {
+    if (!this.lastGraphMessage) {
+      return;
+    }
+    this.postMessageToSurface(surface, { ...this.lastGraphMessage, preserveScroll: false });
+    this.postMessageToSurface(surface, { command: "setSelection", selectedNodes: Array.from(this.selectedNodes) });
+  }
+
+  private async handleMessage(message: Message, source: GraphSurface): Promise<void> {
+    if (
+      !this.repository &&
+      message.command !== "selectChange" &&
+      message.command !== "openDetailsView" &&
+      message.command !== "reportError" &&
+      message.command !== "showWarning"
+    ) {
+      return;
+    }
+    const repo = this.repository!;
+    switch (message.command) {
+      case "editChange":
+        try {
           const change = this.findRegularChange(message.changeId);
-          if (change) {
-            await vscode.commands.executeCommand(
-              "jj.showChangeDetailsWebview",
-              change.commitId,
-              formatChangeIdShort(change.id),
+          if (!change) {
+            return;
+          }
+          const config = vscode.workspace.getConfiguration("juju");
+          const changeDoubleClickAction =
+            config.get<string>("changeDoubleClickAction") || DEFAULT_CHANGE_DOUBLE_CLICK_ACTION;
+          const action = resolveDoubleClickAction({ ...change, changeId: change.id.changeId }, changeDoubleClickAction);
+          if (action === "new") {
+            await repo.new(undefined, [message.changeId]);
+          } else if (action === "edit") {
+            await repo.editRetryImmutable(message.changeId);
+          } else {
+            return;
+          }
+          this._onDidSwitchChange.fire();
+        } catch (error: unknown) {
+          showErrorMessage("Failed to switch to change", error);
+        }
+        break;
+      case "editChangeDirect":
+        try {
+          if (message.changeId === rootChangeId) {
+            return;
+          }
+          const status = await repo.getStatus(true);
+          if (message.changeId === status.workingCopy.changeId.changeId) {
+            return;
+          }
+          await repo.editRetryImmutable(message.changeId);
+          this._onDidSwitchChange.fire();
+        } catch (error: unknown) {
+          showErrorMessage("Failed to switch to change", error);
+        }
+        break;
+      case "newChildChange":
+        await this.withRefresh("create new child change", () => repo.new(undefined, message.changeIds));
+        break;
+      case "insertNewChange":
+        await this.withRefresh("insert new change", () => repo.newAtRetryImmutable(message.changeId, message.position));
+        break;
+      case "selectChange": {
+        // Elided ("~") nodes can never be selected.
+        const selectedIds = message.selectedNodes.filter((id) => this.findRegularChange(id));
+        this.selectedNodes = new Set(selectedIds);
+        this.postMessageToWebview({ command: "setSelection", selectedNodes: selectedIds }, source);
+        vscode.commands.executeCommand("setContext", "jjGraphView.nodesSelected", selectedIds.length);
+        void this.fireSelection(this.resolveSelection(selectedIds));
+        break;
+      }
+      case "openDetailsView":
+        await vscode.commands.executeCommand("jj.openDetailsWebview");
+        break;
+      case "showChangeDetails": {
+        const change = this.findRegularChange(message.changeId);
+        if (change) {
+          await vscode.commands.executeCommand(
+            "jj.showChangeDetailsWebview",
+            change.commitId,
+            formatChangeIdShort(change.id),
+          );
+        }
+        break;
+      }
+      case "moveBookmark":
+        try {
+          await repo.moveBookmark(message.bookmark, message.targetChangeId);
+          await this.refresh();
+        } catch (error: unknown) {
+          if (error instanceof BookmarkBackwardsError) {
+            const choice = await vscode.window.showWarningMessage(
+              "Moving bookmark backwards or sideways, are you sure?",
+              { modal: true },
+              "Move Bookmark",
             );
-          }
-          break;
-        }
-        case "moveBookmark":
-          try {
-            await repo.moveBookmark(message.bookmark, message.targetChangeId);
-            await this.refresh();
-          } catch (error: unknown) {
-            if (error instanceof BookmarkBackwardsError) {
-              const choice = await vscode.window.showWarningMessage(
-                "Moving bookmark backwards or sideways, are you sure?",
-                { modal: true },
-                "Move Bookmark",
-              );
-              if (choice) {
-                try {
-                  await repo.moveBookmark(message.bookmark, message.targetChangeId, true);
-                  await this.refresh();
-                } catch (retryError: unknown) {
-                  showErrorMessage("Failed to move bookmark", retryError);
-                }
+            if (choice) {
+              try {
+                await repo.moveBookmark(message.bookmark, message.targetChangeId, true);
+                await this.refresh();
+              } catch (retryError: unknown) {
+                showErrorMessage("Failed to move bookmark", retryError);
               }
-            } else {
-              showErrorMessage("Failed to move bookmark", error);
             }
+          } else {
+            showErrorMessage("Failed to move bookmark", error);
           }
-          break;
-        case "createBookmark": {
-          const bookmarkName = await vscode.window.showInputBox({
-            prompt: "Enter Bookmark Name",
-            placeHolder: "bookmark-name",
-          });
-          if (bookmarkName === undefined || bookmarkName === "") {
-            break;
-          }
-          await this.withRefresh("create bookmark", () => repo.createBookmark(bookmarkName, message.targetChangeId));
+        }
+        break;
+      case "createBookmark": {
+        const bookmarkName = await vscode.window.showInputBox({
+          prompt: "Enter Bookmark Name",
+          placeHolder: "bookmark-name",
+        });
+        if (bookmarkName === undefined || bookmarkName === "") {
           break;
         }
-        case "createTag": {
-          const tagName = await vscode.window.showInputBox({
-            prompt: "Enter Tag Name",
-            placeHolder: "v1.0.0",
-          });
-          if (tagName === undefined || tagName === "") {
-            break;
-          }
-          await this.withRefresh("create tag", () => repo.createTag(tagName, message.targetChangeId));
+        await this.withRefresh("create bookmark", () => repo.createBookmark(bookmarkName, message.targetChangeId));
+        break;
+      }
+      case "createTag": {
+        const tagName = await vscode.window.showInputBox({
+          prompt: "Enter Tag Name",
+          placeHolder: "v1.0.0",
+        });
+        if (tagName === undefined || tagName === "") {
           break;
         }
-        case "pushBookmark":
-          try {
-            const pushedRemotes = await repo.pushBookmark(message.bookmark);
-            if (pushedRemotes.length === 0) {
-              vscode.window.showInformationMessage(
-                `Bookmark "${message.bookmark}" has no out-of-sync tracked remotes.`,
-              );
-            } else {
-              await this.refresh();
-            }
-          } catch (error: unknown) {
-            if (!(error instanceof CancelledError)) {
-              showErrorMessage("Failed to push bookmark", error);
-            }
-          } finally {
-            this.postMessageToWebview({ command: "pushBookmarkDone", bookmark: message.bookmark });
+        await this.withRefresh("create tag", () => repo.createTag(tagName, message.targetChangeId));
+        break;
+      }
+      case "pushBookmark":
+        try {
+          const pushedRemotes = await repo.pushBookmark(message.bookmark);
+          if (pushedRemotes.length === 0) {
+            vscode.window.showInformationMessage(`Bookmark "${message.bookmark}" has no out-of-sync tracked remotes.`);
+          } else {
+            await this.refresh();
           }
-          break;
-        case "getBookmarkTrackingRemotes":
-          try {
-            const info = await repo.getBookmarkTrackingInfo(message.bookmark);
-            this.postMessageToWebview({
-              command: "bookmarkTrackingRemotesResponse",
-              bookmark: message.bookmark,
-              remotes: info.trackedRemotes,
-              unsyncedRemotes: info.unsyncedTrackedRemotes,
-              untrackedRemotes: info.untrackedRemotes,
-            });
-          } catch (error: unknown) {
-            showErrorMessage("Failed to get bookmark tracking remotes", error);
-            this.postMessageToWebview({
-              command: "bookmarkTrackingRemotesResponse",
-              bookmark: message.bookmark,
-              remotes: [],
-              unsyncedRemotes: [],
-              untrackedRemotes: [],
-            });
+        } catch (error: unknown) {
+          if (!(error instanceof CancelledError)) {
+            showErrorMessage("Failed to push bookmark", error);
           }
-          break;
-        case "pushBookmarkToRemote":
-          await this.withRefresh("push bookmark", () => repo.pushBookmarkToRemote(message.bookmark, message.remote));
+        } finally {
           this.postMessageToWebview({ command: "pushBookmarkDone", bookmark: message.bookmark });
+        }
+        break;
+      case "getBookmarkTrackingRemotes":
+        try {
+          const info = await repo.getBookmarkTrackingInfo(message.bookmark);
+          this.postMessageToWebview({
+            command: "bookmarkTrackingRemotesResponse",
+            bookmark: message.bookmark,
+            remotes: info.trackedRemotes,
+            unsyncedRemotes: info.unsyncedTrackedRemotes,
+            untrackedRemotes: info.untrackedRemotes,
+          });
+        } catch (error: unknown) {
+          showErrorMessage("Failed to get bookmark tracking remotes", error);
+          this.postMessageToWebview({
+            command: "bookmarkTrackingRemotesResponse",
+            bookmark: message.bookmark,
+            remotes: [],
+            unsyncedRemotes: [],
+            untrackedRemotes: [],
+          });
+        }
+        break;
+      case "pushBookmarkToRemote":
+        await this.withRefresh("push bookmark", () => repo.pushBookmarkToRemote(message.bookmark, message.remote));
+        this.postMessageToWebview({ command: "pushBookmarkDone", bookmark: message.bookmark });
+        break;
+      case "trackBookmark":
+        await this.withRefresh("track bookmark", () => repo.trackBookmark(message.bookmark, message.remote));
+        break;
+      case "untrackBookmark":
+        await this.withRefresh("untrack bookmark", () => repo.untrackBookmark(message.bookmark, message.remote));
+        break;
+      case "deleteBookmark":
+        await this.confirmAndExecute(
+          `Are you sure you want to delete the bookmark "${message.bookmark}"?`,
+          "Delete Bookmark",
+          "delete bookmark",
+          () => repo.deleteBookmark(message.bookmark),
+        );
+        break;
+      case "deleteTag":
+        await this.confirmAndExecute(
+          `Are you sure you want to delete the tag "${message.tag}"?`,
+          "Delete Tag",
+          "delete tag",
+          () => repo.deleteTag(message.tag),
+        );
+        break;
+      case "forgetWorkspace":
+        if (await this.isCurrentWorkspace(repo, message.workspace)) {
           break;
-        case "trackBookmark":
-          await this.withRefresh("track bookmark", () => repo.trackBookmark(message.bookmark, message.remote));
+        }
+        await this.confirmAndExecute(
+          `Are you sure you want to forget the workspace "${message.workspace}"?`,
+          "Forget Workspace",
+          "forget workspace",
+          () => repo.forgetWorkspace(message.workspace),
+        );
+        break;
+      case "forgetAndDeleteWorkspace": {
+        if (await this.isCurrentWorkspace(repo, message.workspace)) {
           break;
-        case "untrackBookmark":
-          await this.withRefresh("untrack bookmark", () => repo.untrackBookmark(message.bookmark, message.remote));
+        }
+        let workspaceRoot: string | undefined;
+        try {
+          workspaceRoot = await repo.getWorkspaceRoot(message.workspace);
+        } catch (error: unknown) {
+          showErrorMessage(`Failed to look up workspace "${message.workspace}"`, error);
           break;
-        case "deleteBookmark":
+        }
+        if (!workspaceRoot) {
+          // Degrade gracefully: forget the workspace without deleting its
+          // directory instead of aborting entirely.
           await this.confirmAndExecute(
-            `Are you sure you want to delete the bookmark "${message.bookmark}"?`,
-            "Delete Bookmark",
-            "delete bookmark",
-            () => repo.deleteBookmark(message.bookmark),
-          );
-          break;
-        case "deleteTag":
-          await this.confirmAndExecute(
-            `Are you sure you want to delete the tag "${message.tag}"?`,
-            "Delete Tag",
-            "delete tag",
-            () => repo.deleteTag(message.tag),
-          );
-          break;
-        case "forgetWorkspace":
-          if (await this.isCurrentWorkspace(repo, message.workspace)) {
-            break;
-          }
-          await this.confirmAndExecute(
-            `Are you sure you want to forget the workspace "${message.workspace}"?`,
+            `The root path of workspace "${message.workspace}" could not be determined, so its directory cannot be deleted.\n\nForget the workspace without deleting its directory?`,
             "Forget Workspace",
             "forget workspace",
             () => repo.forgetWorkspace(message.workspace),
           );
           break;
-        case "forgetAndDeleteWorkspace": {
-          if (await this.isCurrentWorkspace(repo, message.workspace)) {
-            break;
-          }
-          let workspaceRoot: string | undefined;
-          try {
-            workspaceRoot = await repo.getWorkspaceRoot(message.workspace);
-          } catch (error: unknown) {
-            showErrorMessage(`Failed to look up workspace "${message.workspace}"`, error);
-            break;
-          }
-          if (!workspaceRoot) {
-            // Degrade gracefully: forget the workspace without deleting its
-            // directory instead of aborting entirely.
-            await this.confirmAndExecute(
-              `The root path of workspace "${message.workspace}" could not be determined, so its directory cannot be deleted.\n\nForget the workspace without deleting its directory?`,
-              "Forget Workspace",
-              "forget workspace",
-              () => repo.forgetWorkspace(message.workspace),
-            );
-            break;
-          }
-          const root = workspaceRoot;
-          await this.confirmAndExecute(
-            `Are you sure you want to forget the workspace "${message.workspace}" and delete its directory "${root}"?\n\n` +
-              `The directory will be deleted, but all jj-recorded changes will be kept.`,
-            "Forget and Delete",
-            "forget and delete workspace",
-            async () => {
-              await repo.forgetWorkspace(message.workspace);
-              await vscode.workspace.fs.delete(toWorkspaceUri(root), { useTrash: false, recursive: true });
-            },
-          );
-          break;
         }
-        case "copyWorkspacePath":
-          try {
-            const workspaceRoot = await repo.getWorkspaceRoot(message.workspace);
-            if (!workspaceRoot) {
-              vscode.window.showWarningMessage(
-                `The root path of workspace "${message.workspace}" could not be determined.`,
-              );
-              break;
-            }
-            await vscode.env.clipboard.writeText(workspaceRoot);
-          } catch (error: unknown) {
-            showErrorMessage("Failed to copy workspace path", error);
-          }
-          break;
-        case "getTagPushRemotes":
-          try {
-            const allRemotes = await repo.getRemotes();
-            const tagRemotes = new Set<string>();
-            for (const change of this.currentChanges) {
-              if (change.branchType === "~") {
-                continue;
-              }
-              for (const rt of change.remoteTags) {
-                if (rt.name === message.tag) {
-                  tagRemotes.add(rt.remote);
-                }
-              }
-            }
-            const pushRemotes = allRemotes.filter((r) => !tagRemotes.has(r));
-            this.postMessageToWebview({
-              command: "tagPushRemotesResponse",
-              tag: message.tag,
-              pushRemotes,
-            });
-          } catch (error: unknown) {
-            showErrorMessage("Failed to get tag push remotes", error);
-            this.postMessageToWebview({
-              command: "tagPushRemotesResponse",
-              tag: message.tag,
-              pushRemotes: [],
-            });
-          }
-          break;
-        case "cancelRemoteRefOperation": {
-          const operation = repo.cancelRefOperation(message.refType, message.name);
-          if (operation) {
-            const kind = message.refType === "bookmark" ? "bookmark" : "tag";
-            const noun = operation === "push" ? "push" : "deletion";
-            vscode.window.showErrorMessage(
-              `Cancelled ${noun} of ${kind} "${message.name}". The ${noun} may already have succeeded. Please fetch from the remote to reconcile the state.`,
-            );
-          }
-          break;
-        }
-        case "pushTagToRemote":
-          await this.withRefresh("push tag", () => repo.pushTagToRemote(message.tag, message.remote));
-          this.postMessageToWebview({ command: "pushTagDone", tag: message.tag });
-          break;
-        case "pushTag":
-          try {
-            const pushedRemotes = await repo.pushTag(message.tag);
-            if (pushedRemotes.length === 0) {
-              vscode.window.showInformationMessage(`Tag "${message.tag}" has no out-of-sync tracked remotes.`);
-            } else {
-              await this.refresh();
-            }
-          } catch (error: unknown) {
-            if (!(error instanceof CancelledError)) {
-              showErrorMessage("Failed to push tag", error);
-            }
-          } finally {
-            this.postMessageToWebview({ command: "pushTagDone", tag: message.tag });
-          }
-          break;
-        case "getTagTrackingRemotes":
-          try {
-            const info = await repo.getTagTrackingInfo(message.tag);
-            this.postMessageToWebview({
-              command: "tagTrackingRemotesResponse",
-              tag: message.tag,
-              remotes: info.pushRemotes,
-            });
-          } catch (error: unknown) {
-            showErrorMessage("Failed to get tag tracking remotes", error);
-            this.postMessageToWebview({
-              command: "tagTrackingRemotesResponse",
-              tag: message.tag,
-              remotes: [],
-            });
-          }
-          break;
-        case "trackTag":
-          await this.withRefresh("track tag", () => repo.trackTag(message.tag, message.remote));
-          break;
-        case "untrackTag":
-          await this.withRefresh("untrack tag", () => repo.untrackTag(message.tag, message.remote));
-          break;
-        case "getRemoteRefStatus":
-          try {
-            const status = await repo.getRemoteRefStatus(message.refType, message.name, message.remote);
-            this.postMessageToWebview({
-              command: "remoteRefStatusResponse",
-              refType: message.refType,
-              name: message.name,
-              remote: message.remote,
-              found: status !== null,
-              tracked: status?.tracked ?? false,
-              synced: status?.synced ?? false,
-              present: status?.present ?? false,
-            });
-          } catch (error: unknown) {
-            showErrorMessage("Failed to get remote ref status", error);
-            this.postMessageToWebview({
-              command: "remoteRefStatusResponse",
-              refType: message.refType,
-              name: message.name,
-              remote: message.remote,
-              found: false,
-              tracked: false,
-              synced: false,
-              present: false,
-            });
-          }
-          break;
-        case "pushRemoteRef":
-          await this.withRefresh("push ref", () =>
-            message.refType === "bookmark"
-              ? repo.pushBookmarkToRemote(message.name, message.remote)
-              : repo.pushTagToRemote(message.name, message.remote),
-          );
-          if (message.refType === "bookmark") {
-            this.postMessageToWebview({ command: "pushBookmarkDone", bookmark: message.name });
-          } else {
-            this.postMessageToWebview({ command: "pushTagDone", tag: message.name });
-          }
-          break;
-        case "deleteRemoteRef": {
-          const refKind = message.refType === "bookmark" ? "bookmark" : "tag";
-          try {
-            await this.confirmAndExecute(
-              `Are you sure you want to delete the ${refKind} "${message.name}" from "${message.remote}"?\n\n!!! This deletes the ${refKind} from the remote !!!`,
-              `Delete from ${message.remote}`,
-              `delete ${refKind} from remote`,
-              () =>
-                message.refType === "bookmark"
-                  ? repo.deleteBookmarkFromRemote(message.name, message.remote)
-                  : repo.deleteTagFromRemote(message.name, message.remote),
-            );
-          } finally {
-            this.postMessageToWebview({
-              command: "deleteRemoteRefDone",
-              refType: message.refType,
-              name: message.name,
-            });
-          }
-          break;
-        }
-        case "restoreRemoteRef":
-          await this.withRefresh("restore ref", () =>
-            repo.restoreRemoteRef(message.refType, message.name, message.remote),
-          );
-          break;
-        case "describeChange":
-          await this.withRefresh("describe change", () => repo.describeRetryImmutable(message.changeId));
-          break;
-        case "absorbChange":
-          await this.withRefresh("absorb change", async () => {
-            const absorbResult = await repo.absorb(message.changeId);
-            if (absorbResult.stderr.toString().includes("Nothing changed.")) {
-              vscode.window.showInformationMessage("Absorb: Nothing changed.");
-            }
-          });
-          break;
-        case "splitChange": {
-          const change = this.findRegularChange(message.changeId);
-          if (!change) {
-            break;
-          }
-          await this.withRefresh("split change", async () => {
-            const state = await this.splitWebview.selectChanges(repo, change.commitId);
-            if (!state) {
-              return;
-            }
-            await repo.splitChangeRetryImmutable({ commitId: change.commitId, state });
-          });
-          break;
-        }
-        case "abandonChange": {
-          const change = this.findRegularChange(message.changeId);
-          const fullDescription = change ? change.fullDescription : "";
-          const firstLine = fullDescription.split("\n")[0].trim() || "(no description set)";
-          const truncated = firstLine.length > 120 ? firstLine.slice(0, 120) + "..." : firstLine;
-          const prompt = change
-            ? `Are you sure you want to abandon change "${formatChangeIdShort(change.id)}"?\n\n→ ${truncated}`
-            : "Are you sure you want to abandon this change?";
-          await this.confirmAndExecute(prompt, "Abandon", "abandon change", () =>
-            repo.abandonRetryImmutable(message.changeId),
-          );
-          break;
-        }
-        case "abandonChanges":
-          await this.confirmAndExecute(
-            `Are you sure you want to abandon ${message.changeIds.length} changes?`,
-            "Abandon",
-            "abandon changes",
-            () =>
-              repo.abandonRetryImmutableMultiple(
-                message.changeIds,
-                "Some of the selected changes are immutable, are you sure?",
-              ),
-          );
-          break;
-        case "copyUrl":
-          try {
-            const url = await repo.getCommitUrl(message.changeId);
-            if (url) {
-              await vscode.env.clipboard.writeText(url);
-            } else {
-              vscode.window.showWarningMessage("No web remote configured for this repository.");
-            }
-          } catch (error: unknown) {
-            showErrorMessage("Failed to get commit URL", error);
-          }
-          break;
-        case "rebaseOnto":
-        case "rebaseAfter":
-        case "rebaseBefore": {
-          const mode = message.command.replace("rebase", "").toLowerCase() as "onto" | "after" | "before";
-          await this.withRefresh("rebase", () =>
-            repo.rebaseRetryImmutable(message.changeIds, message.targetChangeId, mode, message.withDescendants),
-          );
-          break;
-        }
-        case "rebaseAddParent":
-          await this.withRefresh("rebase", () =>
-            repo.rebaseAddParentRetryImmutable(message.changeId, message.targetChangeId),
-          );
-          break;
-        case "rebaseRemoveParent":
-          await this.withRefresh("rebase", () =>
-            repo.rebaseRemoveParentRetryImmutable(message.changeId, message.targetChangeId),
-          );
-          break;
-        case "squashInto":
-          await this.withRefresh("squash", () =>
-            repo.squashRetryImmutable({ fromRevs: message.changeIds, toRev: message.targetChangeId }),
-          );
-          break;
-        case "moveFileChanges":
-          await this.withRefresh("move file changes", () =>
-            repo.squashRetryImmutable({
-              fromRevs: [message.fromChangeId],
-              toRev: message.toChangeId,
-              filepaths: message.paths.map((p) => joinRepositoryPath(repo.repositoryRoot, p)),
-            }),
-          );
-          break;
-        case "discardFileChanges": {
-          const [first] = message.files;
-          if (!first) {
-            break;
-          }
-          const confirmMessage =
-            message.files.length === 1
-              ? `Are you sure you want to discard changes in '${first.path}'?`
-              : `Are you sure you want to discard changes in ${message.files.length} files?`;
-          const confirm = await vscode.window.showWarningMessage(confirmMessage, { modal: true }, "Discard");
-          if (confirm !== "Discard") {
-            break;
-          }
-          await this.withRefresh("discard changes", () =>
-            repo.restoreRetryImmutable(
-              message.changeId,
-              message.files
-                .flatMap((f) => [f.path, ...(f.renamedFrom !== undefined ? [f.renamedFrom] : [])])
-                .map((p) => joinRepositoryPath(repo.repositoryRoot, p)),
-            ),
-          );
-          break;
-        }
-        case "moveFileChangesToNewChange":
-          await this.withRefresh("move file changes to a new change", async () => {
-            const newChangeId = await repo.newAtNoEditRetryImmutable(message.targetChangeId, message.position);
-            if (newChangeId === undefined) {
-              return;
-            }
-            await repo.squashRetryImmutable({
-              fromRevs: [message.fromChangeId],
-              toRev: newChangeId,
-              filepaths: message.paths.map((p) => joinRepositoryPath(repo.repositoryRoot, p)),
-            });
-          });
-          break;
-        case "duplicateOnto":
-        case "duplicateAfter":
-        case "duplicateBefore": {
-          const mode = message.command.replace("duplicate", "").toLowerCase() as "onto" | "after" | "before";
-          await this.withRefresh("duplicate", () =>
-            repo.duplicateRetryImmutable(message.changeIds, message.targetChangeId, mode),
-          );
-          break;
-        }
-        case "revertOnto":
-        case "revertAfter":
-        case "revertBefore": {
-          const mode = message.command.replace("revert", "").toLowerCase() as "onto" | "after" | "before";
-          await this.withRefresh("revert", () =>
-            repo.revertRetryImmutable(message.changeIds, message.targetChangeId, mode),
-          );
-          break;
-        }
-        case "updateStale":
-          await this.withRefresh("update stale working copy", () => repo.updateStale());
-          break;
-        case "fetchDiffStats":
-          try {
-            const stats = await repo.getDiffStats(message.changeId);
-            const response: ExtensionToWebviewMessage = {
-              command: "diffStatsResponse",
-              changeId: message.changeId,
-              stats,
-            };
-            this.postMessageToWebview(response);
-          } catch {
-            // Silently ignore - tooltip simply won't show diff stats
-          }
-          break;
-        case "fetchChangedFiles": {
-          let files: ChangedFile[] | null = null;
-          try {
-            files = (await repo.getChangedFiles(message.commitId)).map((f) => ({
-              type: f.type,
-              path: toForwardSlashes(repositoryRelativePath(repo.repositoryRoot, f.path)),
-              ...(f.renamedFrom
-                ? { renamedFrom: toForwardSlashes(repositoryRelativePath(repo.repositoryRoot, f.renamedFrom)) }
-                : {}),
-              conflict: f.isConflict ?? f.type === "X",
-            }));
-          } catch (error: unknown) {
-            logger.warn(`Failed to load changed files: ${error instanceof Error ? error.message : String(error)}`);
-          }
-          this.postMessageToWebview({ command: "changedFilesResponse", commitId: message.commitId, files });
-          break;
-        }
-        case "openFileDiff": {
-          const { changeId, path: relPath, status, renamedFrom } = message;
-          const absPath = joinRepositoryPath(repo.repositoryRoot, relPath);
-          const fileUri = toWorkspaceUri(absPath);
-
-          let beforeParams: Parameters<typeof toJJUri>[1];
-          let afterParams: Parameters<typeof toJJUri>[1];
-          if (status === "A") {
-            beforeParams = { deleted: true };
-            afterParams = { rev: changeId };
-          } else if (status === "D") {
-            beforeParams = { diffOriginalRev: changeId };
-            afterParams = { deleted: true };
-          } else if (status === "R" || status === "C") {
-            beforeParams = renamedFrom
-              ? { diffOriginalRev: changeId, renamedFrom: joinRepositoryPath(repo.repositoryRoot, renamedFrom) }
-              : { diffOriginalRev: changeId };
-            afterParams = { rev: changeId };
-          } else {
-            beforeParams = { diffOriginalRev: changeId };
-            afterParams = { rev: changeId };
-          }
-          const beforeUri = toJJUri(fileUri, beforeParams);
-          try {
-            const node = this.findRegularChange(changeId);
-            const toRev = node ? formatChangeIdShort(node.id) : await repo.resolveRevSuffix(changeId);
-            const useWorkingCopyRight = shouldOpenWorkingCopyRightSide(
-              changeId,
-              status,
-              await repo.isFileUnchangedInWorkingCopy(changeId, absPath),
-            );
-            const afterUri = useWorkingCopyRight ? fileUri : toJJUri(fileUri, afterParams);
-            const title = useWorkingCopyRight
-              ? formatDiffTitle(renamedFrom, path.basename(relPath), `${toRev} Parent`, formatWorkingCopyTitle())
-              : formatDiffTitle(renamedFrom, path.basename(relPath), undefined, toRev);
-            await vscode.commands.executeCommand("vscode.diff", beforeUri, afterUri, title);
-          } catch (error: unknown) {
-            showErrorMessage("Failed to open diff", error);
-          }
-          break;
-        }
-        case "openFileAtRevision": {
-          const absPath = joinRepositoryPath(repo.repositoryRoot, message.path);
-          try {
-            const node = this.findRegularChange(message.changeId);
-            // Working-copy files open live from disk, mirroring the SCM view where the
-            // working-copy resource URI is the real file.
-            const uri = node?.currentWorkingCopy
-              ? toWorkspaceUri(absPath)
-              : toJJUri(toWorkspaceUri(absPath), { rev: message.changeId });
-            const revForDisplay = node
-              ? node.currentWorkingCopy
-                ? formatWorkingCopyTitle()
-                : formatChangeIdShort(node.id)
-              : await repo.resolveRevSuffix(message.changeId);
-            await vscode.commands.executeCommand(
-              "vscode.open",
-              uri,
-              {},
-              formatAtRevTitle(path.basename(message.path), revForDisplay),
-            );
-          } catch (error: unknown) {
-            showErrorMessage("Failed to open file", error);
-          }
-          break;
-        }
-        case "openFileInWorkingCopy": {
-          const absPath = joinRepositoryPath(repo.repositoryRoot, message.path);
-          try {
-            await vscode.commands.executeCommand("vscode.open", toWorkspaceUri(absPath), {});
-          } catch (error: unknown) {
-            showErrorMessage("Failed to open file", error);
-          }
-          break;
-        }
-        case "copyPath":
-          await vscode.env.clipboard.writeText(
-            toWorkspaceUri(joinRepositoryPath(repo.repositoryRoot, message.path)).fsPath,
-          );
-          break;
-        case "copyRelativePath": {
-          const absPath = joinRepositoryPath(repo.repositoryRoot, message.path);
-          await vscode.env.clipboard.writeText(repositoryRelativePath(repo.repositoryRoot, absPath));
-          break;
-        }
-        case "reportError":
-          logger.error(`Webview error: ${message.message}${message.stack ? `\n${message.stack}` : ""}`);
-          break;
-        case "showWarning":
-          vscode.window.showWarningMessage(message.message);
-          break;
+        const root = workspaceRoot;
+        await this.confirmAndExecute(
+          `Are you sure you want to forget the workspace "${message.workspace}" and delete its directory "${root}"?\n\n` +
+            `The directory will be deleted, but all jj-recorded changes will be kept.`,
+          "Forget and Delete",
+          "forget and delete workspace",
+          async () => {
+            await repo.forgetWorkspace(message.workspace);
+            await vscode.workspace.fs.delete(toWorkspaceUri(root), { useTrash: false, recursive: true });
+          },
+        );
+        break;
       }
-    });
+      case "copyWorkspacePath":
+        try {
+          const workspaceRoot = await repo.getWorkspaceRoot(message.workspace);
+          if (!workspaceRoot) {
+            vscode.window.showWarningMessage(
+              `The root path of workspace "${message.workspace}" could not be determined.`,
+            );
+            break;
+          }
+          await vscode.env.clipboard.writeText(workspaceRoot);
+        } catch (error: unknown) {
+          showErrorMessage("Failed to copy workspace path", error);
+        }
+        break;
+      case "getTagPushRemotes":
+        try {
+          const allRemotes = await repo.getRemotes();
+          const tagRemotes = new Set<string>();
+          for (const change of this.currentChanges) {
+            if (change.branchType === "~") {
+              continue;
+            }
+            for (const rt of change.remoteTags) {
+              if (rt.name === message.tag) {
+                tagRemotes.add(rt.remote);
+              }
+            }
+          }
+          const pushRemotes = allRemotes.filter((r) => !tagRemotes.has(r));
+          this.postMessageToWebview({
+            command: "tagPushRemotesResponse",
+            tag: message.tag,
+            pushRemotes,
+          });
+        } catch (error: unknown) {
+          showErrorMessage("Failed to get tag push remotes", error);
+          this.postMessageToWebview({
+            command: "tagPushRemotesResponse",
+            tag: message.tag,
+            pushRemotes: [],
+          });
+        }
+        break;
+      case "cancelRemoteRefOperation": {
+        const operation = repo.cancelRefOperation(message.refType, message.name);
+        if (operation) {
+          const kind = message.refType === "bookmark" ? "bookmark" : "tag";
+          const noun = operation === "push" ? "push" : "deletion";
+          vscode.window.showErrorMessage(
+            `Cancelled ${noun} of ${kind} "${message.name}". The ${noun} may already have succeeded. Please fetch from the remote to reconcile the state.`,
+          );
+        }
+        break;
+      }
+      case "pushTagToRemote":
+        await this.withRefresh("push tag", () => repo.pushTagToRemote(message.tag, message.remote));
+        this.postMessageToWebview({ command: "pushTagDone", tag: message.tag });
+        break;
+      case "pushTag":
+        try {
+          const pushedRemotes = await repo.pushTag(message.tag);
+          if (pushedRemotes.length === 0) {
+            vscode.window.showInformationMessage(`Tag "${message.tag}" has no out-of-sync tracked remotes.`);
+          } else {
+            await this.refresh();
+          }
+        } catch (error: unknown) {
+          if (!(error instanceof CancelledError)) {
+            showErrorMessage("Failed to push tag", error);
+          }
+        } finally {
+          this.postMessageToWebview({ command: "pushTagDone", tag: message.tag });
+        }
+        break;
+      case "getTagTrackingRemotes":
+        try {
+          const info = await repo.getTagTrackingInfo(message.tag);
+          this.postMessageToWebview({
+            command: "tagTrackingRemotesResponse",
+            tag: message.tag,
+            remotes: info.pushRemotes,
+          });
+        } catch (error: unknown) {
+          showErrorMessage("Failed to get tag tracking remotes", error);
+          this.postMessageToWebview({
+            command: "tagTrackingRemotesResponse",
+            tag: message.tag,
+            remotes: [],
+          });
+        }
+        break;
+      case "trackTag":
+        await this.withRefresh("track tag", () => repo.trackTag(message.tag, message.remote));
+        break;
+      case "untrackTag":
+        await this.withRefresh("untrack tag", () => repo.untrackTag(message.tag, message.remote));
+        break;
+      case "getRemoteRefStatus":
+        try {
+          const status = await repo.getRemoteRefStatus(message.refType, message.name, message.remote);
+          this.postMessageToWebview({
+            command: "remoteRefStatusResponse",
+            refType: message.refType,
+            name: message.name,
+            remote: message.remote,
+            found: status !== null,
+            tracked: status?.tracked ?? false,
+            synced: status?.synced ?? false,
+            present: status?.present ?? false,
+          });
+        } catch (error: unknown) {
+          showErrorMessage("Failed to get remote ref status", error);
+          this.postMessageToWebview({
+            command: "remoteRefStatusResponse",
+            refType: message.refType,
+            name: message.name,
+            remote: message.remote,
+            found: false,
+            tracked: false,
+            synced: false,
+            present: false,
+          });
+        }
+        break;
+      case "pushRemoteRef":
+        await this.withRefresh("push ref", () =>
+          message.refType === "bookmark"
+            ? repo.pushBookmarkToRemote(message.name, message.remote)
+            : repo.pushTagToRemote(message.name, message.remote),
+        );
+        if (message.refType === "bookmark") {
+          this.postMessageToWebview({ command: "pushBookmarkDone", bookmark: message.name });
+        } else {
+          this.postMessageToWebview({ command: "pushTagDone", tag: message.name });
+        }
+        break;
+      case "deleteRemoteRef": {
+        const refKind = message.refType === "bookmark" ? "bookmark" : "tag";
+        try {
+          await this.confirmAndExecute(
+            `Are you sure you want to delete the ${refKind} "${message.name}" from "${message.remote}"?\n\n!!! This deletes the ${refKind} from the remote !!!`,
+            `Delete from ${message.remote}`,
+            `delete ${refKind} from remote`,
+            () =>
+              message.refType === "bookmark"
+                ? repo.deleteBookmarkFromRemote(message.name, message.remote)
+                : repo.deleteTagFromRemote(message.name, message.remote),
+          );
+        } finally {
+          this.postMessageToWebview({
+            command: "deleteRemoteRefDone",
+            refType: message.refType,
+            name: message.name,
+          });
+        }
+        break;
+      }
+      case "restoreRemoteRef":
+        await this.withRefresh("restore ref", () =>
+          repo.restoreRemoteRef(message.refType, message.name, message.remote),
+        );
+        break;
+      case "describeChange":
+        await this.withRefresh("describe change", () => repo.describeRetryImmutable(message.changeId));
+        break;
+      case "absorbChange":
+        await this.withRefresh("absorb change", async () => {
+          const absorbResult = await repo.absorb(message.changeId);
+          if (absorbResult.stderr.toString().includes("Nothing changed.")) {
+            vscode.window.showInformationMessage("Absorb: Nothing changed.");
+          }
+        });
+        break;
+      case "splitChange": {
+        const change = this.findRegularChange(message.changeId);
+        if (!change) {
+          break;
+        }
+        await this.withRefresh("split change", async () => {
+          const state = await this.splitWebview.selectChanges(repo, change.commitId);
+          if (!state) {
+            return;
+          }
+          await repo.splitChangeRetryImmutable({ commitId: change.commitId, state });
+        });
+        break;
+      }
+      case "abandonChange": {
+        const change = this.findRegularChange(message.changeId);
+        const fullDescription = change ? change.fullDescription : "";
+        const firstLine = fullDescription.split("\n")[0].trim() || "(no description set)";
+        const truncated = firstLine.length > 120 ? firstLine.slice(0, 120) + "..." : firstLine;
+        const prompt = change
+          ? `Are you sure you want to abandon change "${formatChangeIdShort(change.id)}"?\n\n→ ${truncated}`
+          : "Are you sure you want to abandon this change?";
+        await this.confirmAndExecute(prompt, "Abandon", "abandon change", () =>
+          repo.abandonRetryImmutable(message.changeId),
+        );
+        break;
+      }
+      case "abandonChanges":
+        await this.confirmAndExecute(
+          `Are you sure you want to abandon ${message.changeIds.length} changes?`,
+          "Abandon",
+          "abandon changes",
+          () =>
+            repo.abandonRetryImmutableMultiple(
+              message.changeIds,
+              "Some of the selected changes are immutable, are you sure?",
+            ),
+        );
+        break;
+      case "copyUrl":
+        try {
+          const url = await repo.getCommitUrl(message.changeId);
+          if (url) {
+            await vscode.env.clipboard.writeText(url);
+          } else {
+            vscode.window.showWarningMessage("No web remote configured for this repository.");
+          }
+        } catch (error: unknown) {
+          showErrorMessage("Failed to get commit URL", error);
+        }
+        break;
+      case "rebaseOnto":
+      case "rebaseAfter":
+      case "rebaseBefore": {
+        const mode = message.command.replace("rebase", "").toLowerCase() as "onto" | "after" | "before";
+        await this.withRefresh("rebase", () =>
+          repo.rebaseRetryImmutable(message.changeIds, message.targetChangeId, mode, message.withDescendants),
+        );
+        break;
+      }
+      case "rebaseAddParent":
+        await this.withRefresh("rebase", () =>
+          repo.rebaseAddParentRetryImmutable(message.changeId, message.targetChangeId),
+        );
+        break;
+      case "rebaseRemoveParent":
+        await this.withRefresh("rebase", () =>
+          repo.rebaseRemoveParentRetryImmutable(message.changeId, message.targetChangeId),
+        );
+        break;
+      case "squashInto":
+        await this.withRefresh("squash", () =>
+          repo.squashRetryImmutable({ fromRevs: message.changeIds, toRev: message.targetChangeId }),
+        );
+        break;
+      case "moveFileChanges":
+        await this.withRefresh("move file changes", () =>
+          repo.squashRetryImmutable({
+            fromRevs: [message.fromChangeId],
+            toRev: message.toChangeId,
+            filepaths: message.paths.map((p) => joinRepositoryPath(repo.repositoryRoot, p)),
+          }),
+        );
+        break;
+      case "discardFileChanges": {
+        const [first] = message.files;
+        if (!first) {
+          break;
+        }
+        const confirmMessage =
+          message.files.length === 1
+            ? `Are you sure you want to discard changes in '${first.path}'?`
+            : `Are you sure you want to discard changes in ${message.files.length} files?`;
+        const confirm = await vscode.window.showWarningMessage(confirmMessage, { modal: true }, "Discard");
+        if (confirm !== "Discard") {
+          break;
+        }
+        await this.withRefresh("discard changes", () =>
+          repo.restoreRetryImmutable(
+            message.changeId,
+            message.files
+              .flatMap((f) => [f.path, ...(f.renamedFrom !== undefined ? [f.renamedFrom] : [])])
+              .map((p) => joinRepositoryPath(repo.repositoryRoot, p)),
+          ),
+        );
+        break;
+      }
+      case "moveFileChangesToNewChange":
+        await this.withRefresh("move file changes to a new change", async () => {
+          const newChangeId = await repo.newAtNoEditRetryImmutable(message.targetChangeId, message.position);
+          if (newChangeId === undefined) {
+            return;
+          }
+          await repo.squashRetryImmutable({
+            fromRevs: [message.fromChangeId],
+            toRev: newChangeId,
+            filepaths: message.paths.map((p) => joinRepositoryPath(repo.repositoryRoot, p)),
+          });
+        });
+        break;
+      case "duplicateOnto":
+      case "duplicateAfter":
+      case "duplicateBefore": {
+        const mode = message.command.replace("duplicate", "").toLowerCase() as "onto" | "after" | "before";
+        await this.withRefresh("duplicate", () =>
+          repo.duplicateRetryImmutable(message.changeIds, message.targetChangeId, mode),
+        );
+        break;
+      }
+      case "revertOnto":
+      case "revertAfter":
+      case "revertBefore": {
+        const mode = message.command.replace("revert", "").toLowerCase() as "onto" | "after" | "before";
+        await this.withRefresh("revert", () =>
+          repo.revertRetryImmutable(message.changeIds, message.targetChangeId, mode),
+        );
+        break;
+      }
+      case "updateStale":
+        await this.withRefresh("update stale working copy", () => repo.updateStale());
+        break;
+      case "fetchDiffStats":
+        try {
+          const stats = await repo.getDiffStats(message.changeId);
+          const response: ExtensionToWebviewMessage = {
+            command: "diffStatsResponse",
+            changeId: message.changeId,
+            stats,
+          };
+          this.postMessageToWebview(response);
+        } catch {
+          // Silently ignore - tooltip simply won't show diff stats
+        }
+        break;
+      case "fetchChangedFiles": {
+        let files: ChangedFile[] | null = null;
+        try {
+          files = (await repo.getChangedFiles(message.commitId)).map((f) => ({
+            type: f.type,
+            path: toForwardSlashes(repositoryRelativePath(repo.repositoryRoot, f.path)),
+            ...(f.renamedFrom
+              ? { renamedFrom: toForwardSlashes(repositoryRelativePath(repo.repositoryRoot, f.renamedFrom)) }
+              : {}),
+            conflict: f.isConflict ?? f.type === "X",
+          }));
+        } catch (error: unknown) {
+          logger.warn(`Failed to load changed files: ${error instanceof Error ? error.message : String(error)}`);
+        }
+        this.postMessageToWebview({ command: "changedFilesResponse", commitId: message.commitId, files });
+        break;
+      }
+      case "openFileDiff": {
+        const { changeId, path: relPath, status, renamedFrom } = message;
+        const absPath = joinRepositoryPath(repo.repositoryRoot, relPath);
+        const fileUri = toWorkspaceUri(absPath);
 
-    await this.updateElidingContext();
-    await this.refresh();
+        let beforeParams: Parameters<typeof toJJUri>[1];
+        let afterParams: Parameters<typeof toJJUri>[1];
+        if (status === "A") {
+          beforeParams = { deleted: true };
+          afterParams = { rev: changeId };
+        } else if (status === "D") {
+          beforeParams = { diffOriginalRev: changeId };
+          afterParams = { deleted: true };
+        } else if (status === "R" || status === "C") {
+          beforeParams = renamedFrom
+            ? { diffOriginalRev: changeId, renamedFrom: joinRepositoryPath(repo.repositoryRoot, renamedFrom) }
+            : { diffOriginalRev: changeId };
+          afterParams = { rev: changeId };
+        } else {
+          beforeParams = { diffOriginalRev: changeId };
+          afterParams = { rev: changeId };
+        }
+        const beforeUri = toJJUri(fileUri, beforeParams);
+        try {
+          const node = this.findRegularChange(changeId);
+          const toRev = node ? formatChangeIdShort(node.id) : await repo.resolveRevSuffix(changeId);
+          const useWorkingCopyRight = shouldOpenWorkingCopyRightSide(
+            changeId,
+            status,
+            await repo.isFileUnchangedInWorkingCopy(changeId, absPath),
+          );
+          const afterUri = useWorkingCopyRight ? fileUri : toJJUri(fileUri, afterParams);
+          const title = useWorkingCopyRight
+            ? formatDiffTitle(renamedFrom, path.basename(relPath), `${toRev} Parent`, formatWorkingCopyTitle())
+            : formatDiffTitle(renamedFrom, path.basename(relPath), undefined, toRev);
+          await vscode.commands.executeCommand("vscode.diff", beforeUri, afterUri, title);
+        } catch (error: unknown) {
+          showErrorMessage("Failed to open diff", error);
+        }
+        break;
+      }
+      case "openFileAtRevision": {
+        const absPath = joinRepositoryPath(repo.repositoryRoot, message.path);
+        try {
+          const node = this.findRegularChange(message.changeId);
+          // Working-copy files open live from disk, mirroring the SCM view where the
+          // working-copy resource URI is the real file.
+          const uri = node?.currentWorkingCopy
+            ? toWorkspaceUri(absPath)
+            : toJJUri(toWorkspaceUri(absPath), { rev: message.changeId });
+          const revForDisplay = node
+            ? node.currentWorkingCopy
+              ? formatWorkingCopyTitle()
+              : formatChangeIdShort(node.id)
+            : await repo.resolveRevSuffix(message.changeId);
+          await vscode.commands.executeCommand(
+            "vscode.open",
+            uri,
+            {},
+            formatAtRevTitle(path.basename(message.path), revForDisplay),
+          );
+        } catch (error: unknown) {
+          showErrorMessage("Failed to open file", error);
+        }
+        break;
+      }
+      case "openFileInWorkingCopy": {
+        const absPath = joinRepositoryPath(repo.repositoryRoot, message.path);
+        try {
+          await vscode.commands.executeCommand("vscode.open", toWorkspaceUri(absPath), {});
+        } catch (error: unknown) {
+          showErrorMessage("Failed to open file", error);
+        }
+        break;
+      }
+      case "copyPath":
+        await vscode.env.clipboard.writeText(
+          toWorkspaceUri(joinRepositoryPath(repo.repositoryRoot, message.path)).fsPath,
+        );
+        break;
+      case "copyRelativePath": {
+        const absPath = joinRepositoryPath(repo.repositoryRoot, message.path);
+        await vscode.env.clipboard.writeText(repositoryRelativePath(repo.repositoryRoot, absPath));
+        break;
+      }
+      case "reportError":
+        logger.error(`Webview error: ${message.message}${message.stack ? `\n${message.stack}` : ""}`);
+        break;
+      case "showWarning":
+        vscode.window.showWarningMessage(message.message);
+        break;
+    }
   }
 
   /**
@@ -908,17 +934,38 @@ export class JJGraphWebview implements vscode.WebviewViewProvider {
     }
   }
 
-  private postMessageToWebview(message: ExtensionToWebviewMessage): Thenable<boolean | undefined> | undefined {
-    return this.panel?.webview.postMessage(message);
+  private postMessageToWebview(message: ExtensionToWebviewMessage, except?: GraphSurface): Thenable<boolean> {
+    return Promise.all(
+      Array.from(this.surfaces)
+        .filter((surface) => surface !== except)
+        .map((surface) => this.postMessageToSurface(surface, message)),
+    ).then((results) => results.some(Boolean));
+  }
+
+  private postMessageToSurface(surface: GraphSurface, message: ExtensionToWebviewMessage): Thenable<boolean> {
+    return Promise.resolve(surface.webview.postMessage(message)).catch((error: unknown) => {
+      logger.warn(`Failed to post to a graph surface: ${error instanceof Error ? error.message : String(error)}`);
+      return false;
+    });
+  }
+
+  private surfaceTitle(): string {
+    return this.repository ? `JJ Graph (${path.basename(this.repository.repositoryRoot)})` : "JJ Graph";
+  }
+
+  private updateTitles(): void {
+    const title = this.surfaceTitle();
+    for (const surface of this.surfaces) {
+      surface.title = title;
+    }
   }
 
   public async setSelectedRepository(repo: JJRepository) {
     const prevRoot = this.repository?.repositoryRoot;
     this.repository = repo;
-    if (this.panel) {
-      this.panel.title = `JJ Graph (${path.basename(this.repository.repositoryRoot)})`;
-    }
+    this.updateTitles();
     if (prevRoot !== repo.repositoryRoot) {
+      this.lastGraphMessage = undefined;
       this.lastSnapshot = undefined;
       await this.refresh();
     }
@@ -1004,7 +1051,7 @@ export class JJGraphWebview implements vscode.WebviewViewProvider {
   }
 
   graphQueryFor(repositoryRoot: string): GraphQuery | undefined {
-    if (!this.panel || this.repository?.repositoryRoot !== repositoryRoot) {
+    if (this.surfaces.size === 0 || this.repository?.repositoryRoot !== repositoryRoot) {
       return undefined;
     }
     const config = vscode.workspace.getConfiguration("juju");
@@ -1015,7 +1062,7 @@ export class JJGraphWebview implements vscode.WebviewViewProvider {
   }
 
   public async refresh() {
-    if (!this.panel || !this.repository || !this.refreshHandler) {
+    if (this.surfaces.size === 0 || !this.repository || !this.refreshHandler) {
       return;
     }
     await this.refreshHandler(this.repository);
@@ -1041,7 +1088,7 @@ export class JJGraphWebview implements vscode.WebviewViewProvider {
   private async render() {
     const snapshot = this.lastSnapshot;
     const repository = this.repository;
-    if (!this.panel || !repository || !snapshot) {
+    if (this.surfaces.size === 0 || !repository || !snapshot) {
       return;
     }
 
@@ -1137,7 +1184,7 @@ export class JJGraphWebview implements vscode.WebviewViewProvider {
 
       const laneInfo = assignLanes(entriesWithSynthetics);
 
-      const msg: ExtensionToWebviewMessage = {
+      const msg: UpdateGraphMessage = {
         command: "updateGraph",
         changes: changes,
         laneInfo,
@@ -1154,6 +1201,7 @@ export class JJGraphWebview implements vscode.WebviewViewProvider {
       if (this.lastSnapshot !== snapshot || this.repository !== repository) {
         return;
       }
+      this.lastGraphMessage = msg;
       this.postMessageToWebview(msg);
       // Notify listeners whenever the resolved selection changed: selected changes may have
       // been removed (e.g. abandoned) or rewritten (same change ID, new commit ID), and both
