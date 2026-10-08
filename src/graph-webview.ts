@@ -172,7 +172,7 @@ export class JJGraphWebview implements vscode.WebviewViewProvider {
           break;
         case "insertNewChange":
           await this.withRefresh("insert new change", () =>
-            repo.newInsertRetryImmutable(message.changeId, message.position),
+            repo.newAtRetryImmutable(message.changeId, message.position),
           );
           break;
         case "selectChange": {
@@ -610,6 +610,19 @@ export class JJGraphWebview implements vscode.WebviewViewProvider {
               filepaths: message.paths.map((p) => joinRepositoryPath(repo.repositoryRoot, p)),
             }),
           );
+          break;
+        case "moveFileChangesToNewChange":
+          await this.withRefresh("move file changes to a new change", async () => {
+            const newChangeId = await repo.newAtNoEditRetryImmutable(message.targetChangeId, message.position);
+            if (newChangeId === undefined) {
+              return;
+            }
+            await repo.squashRetryImmutable({
+              fromRevs: [message.fromChangeId],
+              toRev: newChangeId,
+              filepaths: message.paths.map((p) => joinRepositoryPath(repo.repositoryRoot, p)),
+            });
+          });
           break;
         case "duplicateOnto":
         case "duplicateAfter":

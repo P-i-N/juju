@@ -15,6 +15,8 @@ export interface EdgeHighlight {
 
 export type EdgeCursor = EdgeSide | "shared";
 
+export type DropPosition = "onto" | "after" | "before";
+
 export const EDGE_ZONE_FRACTION = 0.25;
 
 export function edgeSideAt(offsetY: number, height: number): EdgeSide | null {
@@ -45,17 +47,23 @@ function childrenOf(changes: RegularChangeNode[], changeId: FullChangeId): Regul
 }
 
 /**
- * The edges to highlight for the hovered one. Inserting after a change is the
- * same as inserting before its child when that child is its only child and it
- * is that child's only parent, so the two edges are highlighted together.
+ * The edges to highlight for the hovered one, or null when it cannot be used.
+ * Inserting after a change is the same as inserting before its child when
+ * that child is its only child and it is that child's only parent, so the two
+ * edges are highlighted together. Edges touching an excluded change (one being
+ * dragged) cannot be used.
  */
-export function computeEdgeHighlight(changes: ChangeNode[], hovered: HoveredEdge): EdgeHighlight {
+export function computeEdgeHighlight(
+  changes: ChangeNode[],
+  hovered: HoveredEdge,
+  excluded: readonly FullChangeId[] = [],
+): EdgeHighlight | null {
   const regular = regularChanges(changes);
   const top = new Set<FullChangeId>();
   const bottom = new Set<FullChangeId>();
   const change = regular.find((c) => c.id.changeId === hovered.changeId);
   if (!change || !canInsertAt(change, hovered.side)) {
-    return { top, bottom };
+    return null;
   }
 
   if (hovered.side === "top") {
@@ -75,7 +83,22 @@ export function computeEdgeHighlight(changes: ChangeNode[], hovered: HoveredEdge
       }
     }
   }
+  if (excluded.some((id) => top.has(id) || bottom.has(id))) {
+    return null;
+  }
   return { top, bottom };
+}
+
+/**
+ * Where a drop on an edge puts the dropped changes: a bottom edge inserts
+ * before its change, a top edge shared with an only child inserts in between,
+ * and a top edge of its own adds a new child.
+ */
+export function edgeDropPosition(highlight: EdgeHighlight, hovered: HoveredEdge): DropPosition {
+  if (hovered.side === "bottom") {
+    return "before";
+  }
+  return highlight.bottom.size > 0 ? "after" : "onto";
 }
 
 /** The cursor for the row under the pointer: its hovered side, or "shared" when a neighbor's edge lights up too. */

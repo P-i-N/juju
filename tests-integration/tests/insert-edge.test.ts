@@ -171,3 +171,43 @@ test.describe("with tooltips enabled", () => {
     await workbox.keyboard.up(mod);
   });
 });
+
+test("an expanded change has its bottom edge below its changed files", async ({ graphFrame, testRepo, workbox }) => {
+  const idA = await testRepo.commitFile("a.txt", "content a", "A");
+  await testRepo.writeFile("b1.txt", "content b1");
+  await testRepo.writeFile("b2.txt", "content b2");
+  const idB = await testRepo.commit("B");
+
+  const rowA = graphFrame.locator(`#nodes > div[data-change-id^="${idA}/"]`);
+  const rowB = graphFrame.locator(`#nodes > div[data-change-id^="${idB}/"]`);
+  await rowB.locator('[data-role="files-toggle"]').click();
+  const filesOfB = graphFrame.locator(`#nodes > [data-role="changed-file"][data-file-of^="${idB}/"]`);
+  await expect(filesOfB).toHaveCount(2);
+  const lastFile = filesOfB.last();
+
+  await workbox.keyboard.down(mod);
+
+  const bottomOfRow = await edgePoint(rowB, "bottom");
+  await workbox.mouse.move(bottomOfRow.x, bottomOfRow.y);
+  await workbox.mouse.move(bottomOfRow.x + 1, bottomOfRow.y);
+  await expect(graphFrame.locator("[data-edge-top], [data-edge-bottom]")).toHaveCount(0);
+
+  const bottomOfFiles = await edgePoint(lastFile, "bottom");
+  await workbox.mouse.move(bottomOfFiles.x, bottomOfFiles.y);
+  await expect(lastFile).toHaveAttribute("data-edge-bottom", "");
+  await expect(lastFile).toHaveAttribute("data-edge-cursor", "shared");
+  await expect(rowA).toHaveAttribute("data-edge-top", "");
+  await expect(rowB).not.toHaveAttribute("data-edge-bottom");
+  await expect(filesOfB.first()).not.toHaveAttribute("data-edge-bottom");
+
+  await workbox.mouse.dblclick(bottomOfFiles.x, bottomOfFiles.y);
+  await workbox.keyboard.up(mod);
+
+  await expect(async () => {
+    const logEntries = await testRepo.log();
+    expect(getParents(logEntries, "@")).toEqual(["A"]);
+    const working = logEntries.find((e) => e.current_working_copy)!;
+    const b = logEntries.find((e) => e.description.trim() === "B")!;
+    expect(b.parents.map((p) => p.change_id)).toEqual([working.change_id]);
+  }).toPass();
+});

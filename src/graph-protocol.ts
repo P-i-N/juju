@@ -104,6 +104,13 @@ export type WebviewToExtensionMessage =
   | { command: "fetchDiffStats"; changeId: FullChangeId }
   | { command: "fetchChangedFiles"; commitId: string }
   | { command: "moveFileChanges"; fromChangeId: FullChangeId; toChangeId: FullChangeId; paths: string[] }
+  | {
+      command: "moveFileChangesToNewChange";
+      fromChangeId: FullChangeId;
+      targetChangeId: FullChangeId;
+      position: "onto" | "after" | "before";
+      paths: string[];
+    }
   | { command: "editChange"; changeId: FullChangeId }
   | { command: "editChangeDirect"; changeId: FullChangeId }
   | { command: "newChildChange"; changeIds: FullChangeId[] }

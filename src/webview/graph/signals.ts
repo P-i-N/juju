@@ -1,6 +1,7 @@
 import { computed, signal } from "@preact/signals";
 import type { VSCodeAPI } from "./types";
 import { computeEdgeHighlight, type HoveredEdge } from "./insert-edges";
+import type { FileSelection } from "./file-selection";
 import type {
   ChangeNode,
   ChangeIdGraph,
@@ -48,13 +49,24 @@ export const bookmarkDropPreviewTargetId = computed(() => {
 export const hoveredChangeId = signal<string | null>(null);
 export const insertModifierHeld = signal(false);
 export const hoveredEdge = signal<HoveredEdge | null>(null);
+/** The changes being dragged: the whole selection when the dragged change is part of a multi-selection. */
+export const dragSourceIds = computed<FullChangeId[]>(() => {
+  const start = dragStartChangeId.value as FullChangeId | null;
+  if (!start) {
+    return [];
+  }
+  const selection = selectedNodes.value;
+  return selection.size > 1 && selection.has(start) ? [start, ...[...selection].filter((id) => id !== start)] : [start];
+});
 export const edgeHighlight = computed(() => {
   const edge = hoveredEdge.value;
-  if (!edge || !insertModifierHeld.value || isDragging.value) {
+  if (!edge || !insertModifierHeld.value || dragBookmarkName.value) {
     return null;
   }
-  return computeEdgeHighlight(currentChanges.value, edge);
+  return computeEdgeHighlight(currentChanges.value, edge, dragSourceIds.value);
 });
+/** The drop target frame gives way to the edge highlight. */
+export const visibleDropTargetId = computed(() => (edgeHighlight.value ? null : dropTargetId.value));
 export const justFinishedDrag = signal(false);
 export const maxPrefixLength = signal(4);
 export const changeIdHorizontalOffset = signal(0);
@@ -70,12 +82,13 @@ export const expandedFileLists = signal<Set<FullChangeId>>(new Set());
 export type ChangedFilesState = ChangedFile[] | "loading" | "error";
 // Changed files keyed by commit id: a commit id pins the content, so a loaded file list never goes stale.
 export const changedFilesCache = signal<Map<string, ChangedFilesState>>(new Map());
-export interface FileRowRef {
+export const selectedFiles = signal<FileSelection | null>(null);
+export interface DraggedFiles {
   changeId: FullChangeId;
-  path: string;
+  // The paths to move, including the source paths of renamed files.
+  paths: string[];
 }
-export const selectedFile = signal<FileRowRef | null>(null);
-export const dragFile = signal<(FileRowRef & { renamedFrom?: string }) | null>(null);
+export const dragFiles = signal<DraggedFiles | null>(null);
 export const supportsTagTracking = signal(false);
 export const currentWorkspace = signal<string | null>(null);
 export const scrollY = signal(0);

@@ -724,20 +724,71 @@ export class JJRepository {
     );
   }
 
-  private async newInsert(rev: FullChangeId, position: "after" | "before", ignoreImmutable = false) {
+  private async newAt(
+    rev: FullChangeId,
+    position: "onto" | "after" | "before",
+    ignoreImmutable = false,
+    noEdit = false,
+  ) {
     return this.jjCommand([
       "new",
-      position === "after" ? "-A" : "-B",
+      ...(position === "onto" ? [] : [position === "after" ? "-A" : "-B"]),
       rev,
+      ...(noEdit ? ["--no-edit"] : []),
       ...(ignoreImmutable ? ["--ignore-immutable"] : []),
     ]);
   }
 
-  async newInsertRetryImmutable(rev: FullChangeId, position: "after" | "before") {
+  private async neighborChangeIds(rev: FullChangeId): Promise<Set<string>> {
+    const output = await this.jjCommandRead([
+      "log",
+      "-r",
+      `${rev}- | ${rev}+`,
+      "--no-graph",
+      "-T",
+      'change_id ++ "\\n"',
+    ]);
+    return new Set(
+      output
+        .toString()
+        .split("\n")
+        .map((line) => line.trim())
+        .filter((line) => line !== ""),
+    );
+  }
+
+  /**
+   * Creates a new change at the position without switching to it. The new
+   * change is a parent or child of the revision, so it is the one neighbor
+   * that was not there before.
+   */
+  async newAtNoEditRetryImmutable(
+    rev: FullChangeId,
+    position: "onto" | "after" | "before",
+  ): Promise<FullChangeId | undefined> {
+    const before = await this.neighborChangeIds(rev);
+    const created = await this.retryWithImmutable(
+      rev,
+      () => this.newAt(rev, position, false, true),
+      () => this.newAt(rev, position, true, true),
+      "Inserting this change modifies one or more immutable commits, are you sure?",
+      "Modify Immutable Change",
+    );
+    if (created === undefined) {
+      return undefined;
+    }
+    const added = [...(await this.neighborChangeIds(rev))].filter((id) => !before.has(id));
+    if (added.length !== 1) {
+      throw new Error("Could not find the new change");
+    }
+    return added[0] as FullChangeId;
+  }
+
+  async newAtRetryImmutable(rev: FullChangeId, position: "onto" | "after" | "before") {
     return this.retryWithImmutable(
       rev,
-      () => this.newInsert(rev, position),
-      () => this.newInsert(rev, position, true),
+      () => this.newAt(rev, position),
+      () => this.newAt(rev, position, true),
       "Inserting this change modifies one or more immutable commits, are you sure?",
       "Modify Immutable Change",
     );

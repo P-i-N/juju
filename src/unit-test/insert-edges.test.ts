@@ -1,7 +1,13 @@
 /* eslint-disable @typescript-eslint/no-floating-promises */
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { canInsertAt, computeEdgeHighlight, edgeCursorFor, edgeSideAt } from "../webview/graph/insert-edges";
+import {
+  canInsertAt,
+  computeEdgeHighlight,
+  edgeCursorFor,
+  edgeDropPosition,
+  edgeSideAt,
+} from "../webview/graph/insert-edges";
 import { rootChangeId } from "../webview/graph/types";
 import type { ChangeNode, FullChangeId, RegularChangeNode } from "../graph-protocol";
 
@@ -39,8 +45,8 @@ function regular(id: string, parents: string[] = []): RegularChangeNode {
   };
 }
 
-function sorted(ids: ReadonlySet<FullChangeId>): string[] {
-  return [...ids].sort();
+function sorted(ids: ReadonlySet<FullChangeId> | undefined): string[] {
+  return [...(ids ?? [])].sort();
 }
 
 describe("edgeSideAt", () => {
@@ -83,56 +89,95 @@ describe("computeEdgeHighlight", () => {
   it("shares the top edge with the bottom edge of an only child", () => {
     const changes = [regular("b", ["a"]), regular("a")];
     const highlight = computeEdgeHighlight(changes, { changeId: full("a"), side: "top" });
-    assert.deepEqual(sorted(highlight.top), ["a"]);
-    assert.deepEqual(sorted(highlight.bottom), ["b"]);
+    assert.deepEqual(sorted(highlight?.top), ["a"]);
+    assert.deepEqual(sorted(highlight?.bottom), ["b"]);
   });
 
   it("shares the bottom edge with the top edge of an only parent", () => {
     const changes = [regular("b", ["a"]), regular("a")];
     const highlight = computeEdgeHighlight(changes, { changeId: full("b"), side: "bottom" });
-    assert.deepEqual(sorted(highlight.top), ["a"]);
-    assert.deepEqual(sorted(highlight.bottom), ["b"]);
+    assert.deepEqual(sorted(highlight?.top), ["a"]);
+    assert.deepEqual(sorted(highlight?.bottom), ["b"]);
   });
 
   it("keeps the top edge to itself when there are several children", () => {
     const changes = [regular("c", ["a"]), regular("b", ["a"]), regular("a")];
     const highlight = computeEdgeHighlight(changes, { changeId: full("a"), side: "top" });
-    assert.deepEqual(sorted(highlight.top), ["a"]);
-    assert.deepEqual(sorted(highlight.bottom), []);
+    assert.deepEqual(sorted(highlight?.top), ["a"]);
+    assert.deepEqual(sorted(highlight?.bottom), []);
   });
 
   it("keeps the bottom edge to itself when the parent has several children", () => {
     const changes = [regular("c", ["a"]), regular("b", ["a"]), regular("a")];
     const highlight = computeEdgeHighlight(changes, { changeId: full("b"), side: "bottom" });
-    assert.deepEqual(sorted(highlight.top), []);
-    assert.deepEqual(sorted(highlight.bottom), ["b"]);
+    assert.deepEqual(sorted(highlight?.top), []);
+    assert.deepEqual(sorted(highlight?.bottom), ["b"]);
   });
 
   it("keeps the top edge to itself when the only child is a merge", () => {
     const changes = [regular("m", ["a", "b"]), regular("b"), regular("a")];
     const highlight = computeEdgeHighlight(changes, { changeId: full("a"), side: "top" });
-    assert.deepEqual(sorted(highlight.top), ["a"]);
-    assert.deepEqual(sorted(highlight.bottom), []);
+    assert.deepEqual(sorted(highlight?.top), ["a"]);
+    assert.deepEqual(sorted(highlight?.bottom), []);
   });
 
   it("keeps the bottom edge of a merge to itself", () => {
     const changes = [regular("m", ["a", "b"]), regular("b"), regular("a")];
     const highlight = computeEdgeHighlight(changes, { changeId: full("m"), side: "bottom" });
-    assert.deepEqual(sorted(highlight.top), []);
-    assert.deepEqual(sorted(highlight.bottom), ["m"]);
+    assert.deepEqual(sorted(highlight?.top), []);
+    assert.deepEqual(sorted(highlight?.bottom), ["m"]);
   });
 
   it("highlights nothing for the bottom edge of the root", () => {
     const changes = [regular("a", [rootChangeId]), regular(rootChangeId)];
-    const highlight = computeEdgeHighlight(changes, { changeId: rootChangeId, side: "bottom" });
-    assert.deepEqual(sorted(highlight.top), []);
-    assert.deepEqual(sorted(highlight.bottom), []);
+    assert.equal(computeEdgeHighlight(changes, { changeId: rootChangeId, side: "bottom" }), null);
   });
 
   it("highlights nothing for an unknown change", () => {
-    const highlight = computeEdgeHighlight([regular("a")], { changeId: full("x"), side: "top" });
-    assert.deepEqual(sorted(highlight.top), []);
-    assert.deepEqual(sorted(highlight.bottom), []);
+    assert.equal(computeEdgeHighlight([regular("a")], { changeId: full("x"), side: "top" }), null);
+  });
+
+  it("highlights nothing for an edge of an excluded change", () => {
+    const changes = [regular("c", ["b"]), regular("b", ["a"]), regular("a")];
+    assert.equal(computeEdgeHighlight(changes, { changeId: full("b"), side: "top" }, [full("b")]), null);
+  });
+
+  it("highlights nothing for an edge shared with an excluded change", () => {
+    const changes = [regular("c", ["b"]), regular("b", ["a"]), regular("a")];
+    assert.equal(computeEdgeHighlight(changes, { changeId: full("a"), side: "top" }, [full("b")]), null);
+  });
+
+  it("highlights an edge that does not touch an excluded change", () => {
+    const changes = [regular("c", ["a"]), regular("b", ["a"]), regular("a")];
+    const highlight = computeEdgeHighlight(changes, { changeId: full("a"), side: "top" }, [full("b")]);
+    assert.deepEqual(sorted(highlight?.top), ["a"]);
+    assert.deepEqual(sorted(highlight?.bottom), []);
+  });
+});
+
+describe("edgeDropPosition", () => {
+  it("drops onto a change through a top edge of its own", () => {
+    const changes = [regular("c", ["a"]), regular("b", ["a"]), regular("a")];
+    const hovered = { changeId: full("a"), side: "top" } as const;
+    assert.equal(edgeDropPosition(computeEdgeHighlight(changes, hovered)!, hovered), "onto");
+  });
+
+  it("inserts after a change through a top edge shared with its only child", () => {
+    const changes = [regular("b", ["a"]), regular("a")];
+    const hovered = { changeId: full("a"), side: "top" } as const;
+    assert.equal(edgeDropPosition(computeEdgeHighlight(changes, hovered)!, hovered), "after");
+  });
+
+  it("inserts before a change through its bottom edge", () => {
+    const changes = [regular("c", ["a"]), regular("b", ["a"]), regular("a")];
+    const hovered = { changeId: full("b"), side: "bottom" } as const;
+    assert.equal(edgeDropPosition(computeEdgeHighlight(changes, hovered)!, hovered), "before");
+  });
+
+  it("inserts before a change through a bottom edge shared with its only parent", () => {
+    const changes = [regular("b", ["a"]), regular("a")];
+    const hovered = { changeId: full("b"), side: "bottom" } as const;
+    assert.equal(edgeDropPosition(computeEdgeHighlight(changes, hovered)!, hovered), "before");
   });
 });
 

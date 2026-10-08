@@ -1,8 +1,9 @@
-import { useComputed, type ReadonlySignal } from "@preact/signals";
+import { signal, useComputed, type ReadonlySignal } from "@preact/signals";
 import { type HTMLAttributes, type RefObject } from "preact";
 import { memo } from "preact/compat";
+import { useMemo } from "preact/hooks";
 import { editChange } from "../edit-change";
-import { useDragDrop } from "../hooks/use-drag-drop";
+import { dropOnEdge, useDragDrop } from "../hooks/use-drag-drop";
 import { createTooltipTimers } from "../hooks/tooltip-timers";
 import dragGhostStyles from "./drag-ghost.module.css";
 import {
@@ -31,8 +32,8 @@ import {
   expandedFileLists,
   changedFilesCache,
   setFileListsExpanded,
-  selectedFile,
-  dragFile,
+  selectedFiles,
+  dragFiles,
   dragBookmarkName,
   dragStartChangeId,
   pillContextMenu,
@@ -51,12 +52,14 @@ import {
   currentChanges,
   connectedHighlight,
   selectionAnchorId,
-  insertModifierHeld,
   hoveredEdge,
   edgeHighlight,
+  visibleDropTargetId,
 } from "../signals";
 import { computeSelection } from "../selection";
-import { canInsertAt, edgeCursorFor, edgeSideAt, type EdgeCursor, type EdgeSide } from "../insert-edges";
+import { computeFileSelection, draggedFilePaths } from "../file-selection";
+import { edgeCursorFor, type EdgeCursor } from "../insert-edges";
+import { clearHoveredEdge, insertSideAt, updateHoveredEdge } from "../edge-hover";
 import { SWIMLANE_WIDTH, CHANGE_ID_RIGHT_PADDING, rootChangeId } from "../types";
 import {
   getUniqueId,
@@ -87,18 +90,59 @@ interface Props {
   compact: boolean;
 }
 
-function insertSideAt(change: ChangeNode, e: MouseEvent): EdgeSide | null {
-  const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-  const side = edgeSideAt(e.clientY - rect.top, rect.height);
-  return side !== null && canInsertAt(change, side) ? side : null;
-}
+const noEdge = signal(false);
 
 function canHaveChangedFiles(change: RegularChangeNode): boolean {
   return !change.elided && (!change.isEmpty || change.conflict);
 }
 
+// A change with its changed files expanded has its bottom edge below them.
+interface FileAreaEdge {
+  edgeBottom: ReadonlySignal<boolean>;
+  edgeCursor: ReadonlySignal<EdgeCursor | null>;
+}
+
+function fileAreaEdgeProps(change: RegularChangeNode, edge: FileAreaEdge) {
+  const cursor = edge.edgeCursor.value;
+  return {
+    class: cx(
+      edge.edgeBottom.value && styles.edgeBottom,
+      cursor === "bottom" && styles.edgeCursorBottom,
+      cursor === "shared" && styles.edgeCursorShared,
+    ),
+    "data-edge-bottom": edge.edgeBottom.value ? "" : undefined,
+    "data-edge-cursor": cursor ?? undefined,
+    onMouseEnter: (e: MouseEvent) => updateHoveredEdge(change, e, "bottom"),
+    onMouseMove: (e: MouseEvent) => updateHoveredEdge(change, e, "bottom"),
+    onMouseLeave: () => clearHoveredEdge(change),
+    onDragOver: (e: DragEvent) => {
+      updateHoveredEdge(change, e, "bottom");
+      if (edgeHighlight.value) {
+        e.preventDefault();
+        e.dataTransfer!.dropEffect = "move";
+      }
+    },
+    onDragLeave: (e: DragEvent) => {
+      const relatedTarget = e.relatedTarget as HTMLElement | null;
+      if (relatedTarget && (e.currentTarget as HTMLElement).contains(relatedTarget)) {
+        return;
+      }
+      clearHoveredEdge(change);
+    },
+    onDrop: (e: DragEvent) => {
+      if (dropOnEdge(change, e, "bottom")) {
+        e.preventDefault();
+      }
+    },
+    onDblClick: (e: MouseEvent) => {
+      if ((e.ctrlKey || e.metaKey) && insertSideAt(change, e, "bottom")) {
+        postMessage({ command: "insertNewChange", changeId: change.id.changeId, position: "before" });
+      }
+    },
+  };
+}
+
 export function ChangeNodeRow({ change, index, nodeData, changeIdRef, compact }: Props) {
-  const dragProps = useDragDrop(change);
   const { startHoverTimers, clearHoverTimers, clearHideTimer, scheduleHideTooltip } = createTooltipTimers();
   const isElided = change.branchType === "~";
   // Per-row computed signal to re-render only rows whose selection changed.
@@ -108,6 +152,9 @@ export function ChangeNodeRow({ change, index, nodeData, changeIdRef, compact }:
   );
   const filesState =
     filesExpanded.value && change.branchType !== "~" ? changedFilesCache.value.get(change.commitId) : undefined;
+  const hasFileArea = Array.isArray(filesState) || filesState === "error";
+  const rowZones = hasFileArea ? "top" : "both";
+  const dragProps = useDragDrop(change, rowZones);
   const edgeTop = useComputed(
     () => change.branchType !== "~" && (edgeHighlight.value?.top.has(change.id.changeId) ?? false),
   );
@@ -117,34 +164,22 @@ export function ChangeNodeRow({ change, index, nodeData, changeIdRef, compact }:
   const edgeCursor = useComputed(() =>
     change.branchType === "~" ? null : edgeCursorFor(edgeHighlight.value, hoveredEdge.value, change.id.changeId),
   );
+  const topEdgeCursor = useComputed(() => (hoveredEdge.value?.side === "top" ? edgeCursor.value : null));
+  const bottomEdgeCursor = useComputed(() => (hoveredEdge.value?.side === "bottom" ? edgeCursor.value : null));
+  const fileAreaEdge = useMemo(() => ({ edgeBottom, edgeCursor: bottomEdgeCursor }), [edgeBottom, bottomEdgeCursor]);
   const graphW = SWIMLANE_WIDTH * (nodeData?.numLanesActiveVisually ?? 0);
-
-  const updateHoveredEdge = (e: MouseEvent) => {
-    insertModifierHeld.value = e.ctrlKey || e.metaKey;
-    const side = insertSideAt(change, e);
-    const current = hoveredEdge.value;
-    if (side === null || change.branchType === "~") {
-      if (current !== null) {
-        hoveredEdge.value = null;
-      }
-      return;
-    }
-    if (current?.changeId !== change.id.changeId || current.side !== side) {
-      hoveredEdge.value = { changeId: change.id.changeId, side };
-    }
-  };
 
   const handleClick = (e: MouseEvent) => {
     if (isDragging.value || justFinishedDrag.value) {
       return;
     }
-    if ((e.ctrlKey || e.metaKey) && insertSideAt(change, e) !== null) {
+    if ((e.ctrlKey || e.metaKey) && insertSideAt(change, e, rowZones) !== null) {
       return;
     }
     if (isElided && !e.shiftKey) {
       return;
     }
-    selectedFile.value = null;
+    selectedFiles.value = null;
 
     const outcome = computeSelection(currentChanges.value, index, selectionAnchorId.value, selectedNodes.value, {
       shiftKey: e.shiftKey,
@@ -166,7 +201,7 @@ export function ChangeNodeRow({ change, index, nodeData, changeIdRef, compact }:
     if (change.branchType === "~") {
       return;
     }
-    const side = (e.ctrlKey || e.metaKey) && insertSideAt(change, e);
+    const side = (e.ctrlKey || e.metaKey) && insertSideAt(change, e, rowZones);
     if (side) {
       postMessage({
         command: "insertNewChange",
@@ -217,12 +252,12 @@ export function ChangeNodeRow({ change, index, nodeData, changeIdRef, compact }:
       };
     }
     hoveredChangeId.value = getUniqueId(change);
-    updateHoveredEdge(e);
+    updateHoveredEdge(change, e, rowZones);
     tryStartTooltip(e);
   };
 
   const handleMouseMove = (e: MouseEvent) => {
-    updateHoveredEdge(e);
+    updateHoveredEdge(change, e, rowZones);
     clearHoverTimers();
     tryStartTooltip(e);
   };
@@ -248,8 +283,8 @@ export function ChangeNodeRow({ change, index, nodeData, changeIdRef, compact }:
         isElided={isElided}
         selected={isSelected}
         edgeTop={edgeTop}
-        edgeBottom={edgeBottom}
-        edgeCursor={edgeCursor}
+        edgeBottom={hasFileArea ? noEdge : edgeBottom}
+        edgeCursor={hasFileArea ? topEdgeCursor : edgeCursor}
         modeClasses={modeClasses}
         data-change-id={changeUniqueId}
         onClick={handleClick}
@@ -286,12 +321,18 @@ export function ChangeNodeRow({ change, index, nodeData, changeIdRef, compact }:
         )}
       </ChangeNodeClass>
       {change.branchType !== "~" && Array.isArray(filesState) && filesState.length > 0 && (
-        <MemoizedChangedFileRows change={change} files={filesState} graphW={graphW} />
+        <MemoizedChangedFileRows change={change} files={filesState} graphW={graphW} bottomEdge={fileAreaEdge} />
       )}
       {change.branchType !== "~" && Array.isArray(filesState) && filesState.length === 0 && (
-        <FileRowMessage graphW={graphW}>No changed files</FileRowMessage>
+        <FileRowMessage change={change} graphW={graphW} bottomEdge={fileAreaEdge}>
+          No changed files
+        </FileRowMessage>
       )}
-      {filesState === "error" && <FileRowMessage graphW={graphW}>Failed to load changed files</FileRowMessage>}
+      {change.branchType !== "~" && filesState === "error" && (
+        <FileRowMessage change={change} graphW={graphW} bottomEdge={fileAreaEdge}>
+          Failed to load changed files
+        </FileRowMessage>
+      )}
     </>
   );
 }
@@ -325,7 +366,7 @@ function ChangeNodeClass({
         currentWorkingCopy && styles.workingCopy,
         isElided && styles.elidedNode,
         selected.value && styles.selected,
-        dropTargetId.value === changeId && styles.dropTarget,
+        visibleDropTargetId.value === changeId && styles.dropTarget,
         edgeTop.value && styles.edgeTop,
         edgeBottom.value && styles.edgeBottom,
         edgeCursor.value === "top" && styles.edgeCursorTop,
@@ -468,6 +509,7 @@ const MemoizedChangeNodeTextContent = memo(function ChangeNodeTextContent({
               isDragging.value = false;
               dragBookmarkName.value = null;
               dropTargetId.value = null;
+              hoveredEdge.value = null;
             }}
           >
             {!b.synced &&
@@ -694,12 +736,24 @@ function fileRowStyle(graphW: number) {
   };
 }
 
-function FileRowMessage({ graphW, children }: { graphW: number; children: preact.ComponentChildren }) {
+function FileRowMessage({
+  change,
+  graphW,
+  bottomEdge,
+  children,
+}: {
+  change: RegularChangeNode;
+  graphW: number;
+  bottomEdge: FileAreaEdge;
+  children: preact.ComponentChildren;
+}) {
+  const { class: edgeClass, ...edgeProps } = fileAreaEdgeProps(change, bottomEdge);
   return (
     <div
-      class={cx(styles.fileRow, styles.fileRowMessage)}
+      class={cx(styles.fileRow, styles.fileRowMessage, edgeClass)}
       data-role="changed-file-message"
       style={fileRowStyle(graphW)}
+      {...edgeProps}
     >
       {children}
     </div>
@@ -710,30 +764,56 @@ const MemoizedChangedFileRows = memo(function ChangedFileRows({
   change,
   files,
   graphW,
+  bottomEdge,
 }: {
   change: RegularChangeNode;
   files: ChangedFile[];
   graphW: number;
+  bottomEdge: FileAreaEdge;
 }) {
   return (
     <>
-      {files.map((f) => (
-        <FileRow key={f.path} change={change} file={f} graphW={graphW} />
+      {files.map((f, i) => (
+        <FileRow
+          key={f.path}
+          change={change}
+          file={f}
+          files={files}
+          graphW={graphW}
+          bottomEdge={i === files.length - 1 ? bottomEdge : undefined}
+        />
       ))}
     </>
   );
 });
 
-function FileRow({ change, file, graphW }: { change: RegularChangeNode; file: ChangedFile; graphW: number }) {
-  const selected = selectedFile.value?.changeId === change.id.changeId && selectedFile.value.path === file.path;
+function FileRow({
+  change,
+  file,
+  files,
+  graphW,
+  bottomEdge,
+}: {
+  change: RegularChangeNode;
+  file: ChangedFile;
+  files: ChangedFile[];
+  graphW: number;
+  bottomEdge?: FileAreaEdge;
+}) {
+  const edge = bottomEdge ? fileAreaEdgeProps(change, bottomEdge) : null;
+  const { class: edgeClass, ...edgeProps } = edge ?? { class: "" };
+  const selection = selectedFiles.value;
+  const selected = selection?.changeId === change.id.changeId && selection.paths.has(file.path);
+  const isInsertEdgeEvent = (e: MouseEvent) =>
+    !!bottomEdge && (e.ctrlKey || e.metaKey) && insertSideAt(change, e, "bottom") !== null;
   const separator = file.path.lastIndexOf("/");
   const fileName = file.path.slice(separator + 1);
   const directory = separator === -1 ? "" : file.path.slice(0, separator);
   return (
     <div
-      class={cx(styles.fileRow, selected && styles.selected)}
+      class={cx(styles.fileRow, selected && styles.selected, edgeClass)}
       style={fileRowStyle(graphW)}
-      title="Open diff"
+      title="Double-click to open diff"
       data-role="changed-file"
       data-file-of={change.id.changeId}
       data-path={file.path}
@@ -741,11 +821,25 @@ function FileRow({ change, file, graphW }: { change: RegularChangeNode; file: Ch
       data-conflict={file.conflict ? "" : undefined}
       data-selected={selected ? "" : undefined}
       draggable={change.id.changeId !== rootChangeId}
-      onClick={() => {
-        if (isDragging.value || justFinishedDrag.value) {
+      {...edgeProps}
+      onClick={(e) => {
+        if (isDragging.value || justFinishedDrag.value || isInsertEdgeEvent(e)) {
           return;
         }
-        selectedFile.value = { changeId: change.id.changeId, path: file.path };
+        selectedFiles.value = computeFileSelection(
+          selectedFiles.value,
+          change.id.changeId,
+          files.map((f) => f.path),
+          file.path,
+          { shiftKey: e.shiftKey, toggleKey: e.ctrlKey || e.metaKey },
+        );
+      }}
+      onDblClick={(e) => {
+        if (isInsertEdgeEvent(e)) {
+          edge?.onDblClick(e);
+          return;
+        }
+        selectedFiles.value = { changeId: change.id.changeId, paths: new Set([file.path]), anchor: file.path };
         postMessage({
           command: "openFileDiff",
           changeId: change.id.changeId,
@@ -766,30 +860,43 @@ function FileRow({ change, file, graphW }: { change: RegularChangeNode; file: Ch
         };
       }}
       onDragStart={(e) => {
+        const draggedPaths = draggedFilePaths(
+          selectedFiles.value,
+          change.id.changeId,
+          files.map((f) => f.path),
+          file.path,
+        );
+        const dragged = files.filter((f) => draggedPaths.includes(f.path));
         dragStartChangeId.value = null;
         dragBookmarkName.value = null;
-        dragFile.value = {
+        dragFiles.value = {
           changeId: change.id.changeId,
-          path: file.path,
-          ...(file.renamedFrom ? { renamedFrom: file.renamedFrom } : {}),
+          paths: dragged.flatMap((f) => (f.renamedFrom ? [f.path, f.renamedFrom] : [f.path])),
         };
         isDragging.value = true;
         clearAllTooltipTimers();
         tooltip.value = null;
         e.dataTransfer!.setData("text/plain", file.path);
-        e.dataTransfer!.effectAllowed = "move";
+        e.dataTransfer!.effectAllowed = "copyMove";
 
         const ghost = document.createElement("div");
         ghost.className = dragGhostStyles.dragGhost;
         ghost.textContent = file.path;
+        if (dragged.length > 1) {
+          const count = document.createElement("span");
+          count.className = dragGhostStyles.dragGhostCount;
+          count.textContent = `+ ${dragged.length - 1} more`;
+          ghost.appendChild(count);
+        }
         document.body.appendChild(ghost);
         e.dataTransfer!.setDragImage(ghost, -15, 0);
         setTimeout(() => ghost.remove(), 0);
       }}
       onDragEnd={() => {
         isDragging.value = false;
-        dragFile.value = null;
+        dragFiles.value = null;
         dropTargetId.value = null;
+        hoveredEdge.value = null;
       }}
     >
       <span class={styles.fileName} data-role="file-name">

@@ -6,18 +6,64 @@ import {
   rebaseMenu,
   tooltip,
   dragBookmarkName,
-  dragFile,
+  dragFiles,
   postMessage,
   closeAllMenus,
   selectedNodes,
+  hoveredEdge,
+  dragSourceIds,
+  clearAllTooltipTimers,
 } from "../signals";
+import { clearHoveredEdge, edgeDropAt, updateHoveredEdge, type EdgeZones } from "../edge-hover";
 import { createTooltipTimers } from "./tooltip-timers";
 import { rootChangeId } from "../types";
 import type { ChangeNode, FullChangeId } from "../../../graph-protocol";
 import changeNodeStyles from "../components/change-node.module.css";
 import dragGhostStyles from "../components/drag-ghost.module.css";
 
-export function useDragDrop(change: ChangeNode) {
+/**
+ * Performs a Ctrl+drop of the dragged changes or changed file on the change's
+ * edge under the pointer. Returns whether the drop landed on an edge.
+ */
+export function dropOnEdge(change: ChangeNode, e: DragEvent, zones: EdgeZones = "both"): boolean {
+  if (change.branchType === "~" || dragBookmarkName.value) {
+    return false;
+  }
+  const position = edgeDropAt(change, e, zones);
+  if (!position) {
+    return false;
+  }
+  const files = dragFiles.value;
+  const sourceIds = dragSourceIds.value;
+  clearAllTooltipTimers();
+  tooltip.value = null;
+  isDragging.value = false;
+  dragFiles.value = null;
+  dropTargetId.value = null;
+  justFinishedDrag.value = true;
+  setTimeout(() => {
+    justFinishedDrag.value = false;
+  }, 100);
+  if (files) {
+    postMessage({
+      command: "moveFileChangesToNewChange",
+      fromChangeId: files.changeId,
+      targetChangeId: change.id.changeId,
+      position,
+      paths: files.paths,
+    });
+  } else if (sourceIds.length > 0) {
+    postMessage({
+      command: position === "onto" ? "rebaseOnto" : position === "after" ? "rebaseAfter" : "rebaseBefore",
+      changeIds: sourceIds,
+      targetChangeId: change.id.changeId,
+      withDescendants: false,
+    });
+  }
+  return true;
+}
+
+export function useDragDrop(change: ChangeNode, zones: EdgeZones = "both") {
   // Elided ("~") rows return early here. This is only safe because this hook
   // calls no real hooks itself below — createTooltipTimers() is a plain
   // closure factory over module-level signals, not a hook. Do not add real
@@ -38,13 +84,15 @@ export function useDragDrop(change: ChangeNode) {
             return;
           }
           dragBookmarkName.value = null;
-          dragFile.value = null;
+          dragFiles.value = null;
           dragStartChangeId.value = change.id.changeId;
           isDragging.value = true;
           clearAllTimers();
           tooltip.value = null;
           e.dataTransfer!.setData("text/plain", change.id.changeId);
-          e.dataTransfer!.effectAllowed = "move";
+          // Holding Ctrl asks for a copy on some platforms; allowing it keeps
+          // Ctrl+drops onto insert edges possible.
+          e.dataTransfer!.effectAllowed = "copyMove";
 
           const ghost = document.createElement("div");
           ghost.className = dragGhostStyles.dragGhost;
@@ -93,39 +141,41 @@ export function useDragDrop(change: ChangeNode) {
           dragStartChangeId.value = null;
           dragBookmarkName.value = null;
           dropTargetId.value = null;
+          hoveredEdge.value = null;
         },
     onDragOver: (e: DragEvent) => {
       e.preventDefault();
       e.dataTransfer!.dropEffect = "move";
+      updateHoveredEdge(change, e, zones);
     },
     onDragEnter: (e: DragEvent) => {
       e.preventDefault();
       if (!isDragging.value) {
         return;
       }
-      if (!dragBookmarkName.value && !dragStartChangeId.value && !dragFile.value) {
+      if (!dragBookmarkName.value && !dragStartChangeId.value && !dragFiles.value) {
         return;
       }
       if (dragStartChangeId.value && change.id.changeId === dragStartChangeId.value) {
         return;
       }
-      if (dragFile.value && change.id.changeId === dragFile.value.changeId) {
+      if (dragFiles.value && change.id.changeId === dragFiles.value.changeId) {
         return;
       }
       dropTargetId.value = change.id.changeId;
     },
     onDragLeave: (e: DragEvent) => {
-      // Browsers fire dragenter on the new row before dragleave on the old
-      // one, so only clear the highlight if it still belongs to this row.
-      if (dropTargetId.value !== change.id.changeId) {
-        return;
-      }
       const relatedTarget = e.relatedTarget as HTMLElement | null;
       const currentTarget = e.currentTarget as HTMLElement;
       if (relatedTarget && currentTarget.contains(relatedTarget)) {
         return;
       }
-      dropTargetId.value = null;
+      // Browsers fire dragenter on the new row before dragleave on the old
+      // one, so only clear the highlights if they still belong to this row.
+      clearHoveredEdge(change);
+      if (dropTargetId.value === change.id.changeId) {
+        dropTargetId.value = null;
+      }
     },
     onDrop: (e: DragEvent) => {
       e.preventDefault();
@@ -149,23 +199,27 @@ export function useDragDrop(change: ChangeNode) {
         return;
       }
 
-      if (dragFile.value) {
-        const file = dragFile.value;
+      if (dropOnEdge(change, e, zones)) {
+        return;
+      }
+
+      if (dragFiles.value) {
+        const files = dragFiles.value;
         clearAllTimers();
         tooltip.value = null;
         isDragging.value = false;
-        dragFile.value = null;
+        dragFiles.value = null;
         dropTargetId.value = null;
         justFinishedDrag.value = true;
         setTimeout(() => {
           justFinishedDrag.value = false;
         }, 100);
-        if (file.changeId !== change.id.changeId) {
+        if (files.changeId !== change.id.changeId) {
           postMessage({
             command: "moveFileChanges",
-            fromChangeId: file.changeId,
+            fromChangeId: files.changeId,
             toChangeId: change.id.changeId,
-            paths: file.renamedFrom ? [file.path, file.renamedFrom] : [file.path],
+            paths: files.paths,
           });
         }
         return;

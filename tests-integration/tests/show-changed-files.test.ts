@@ -1,4 +1,4 @@
-import { test, expect, clickFileMenuItem, runCommand, canonicalPath } from "./base-test";
+import { test, expect, clickFileMenuItem, runCommand, canonicalPath, mod } from "./base-test";
 import type { Frame } from "@playwright/test";
 import path from "path";
 
@@ -87,6 +87,62 @@ test.describe("with showChangedFiles enabled by default", () => {
     await expect(bFile).not.toHaveAttribute("data-selected", "");
   });
 
+  test("changed files of one change can be multi-selected", async ({ graphFrame, testRepo }) => {
+    await testRepo.writeFile("x.txt", "content x");
+    const other = await testRepo.commit("other");
+    for (const name of ["a.txt", "b.txt", "c.txt", "d.txt"]) {
+      await testRepo.writeFile(name, `content ${name}`);
+    }
+    const change = await testRepo.commit("four files");
+
+    await graphFrame.locator(`#nodes > div[data-change-id^="${change}/"] [data-role="files-toggle"]`).click();
+    await graphFrame.locator(`#nodes > div[data-change-id^="${other}/"] [data-role="files-toggle"]`).click();
+    const file = (name: string) => fileRows(graphFrame, change, name);
+    const selected = graphFrame.locator('#nodes > [data-role="changed-file"][data-selected]');
+    await expect(file("d.txt")).toBeVisible();
+
+    await file("a.txt").click();
+    await file("c.txt").click({ modifiers: ["Shift"] });
+    await expect(selected).toHaveCount(3);
+    await expect(file("d.txt")).not.toHaveAttribute("data-selected", "");
+
+    await file("b.txt").click({ modifiers: [mod] });
+    await expect(file("b.txt")).not.toHaveAttribute("data-selected", "");
+    await expect(selected).toHaveCount(2);
+
+    await file("d.txt").click({ modifiers: [mod] });
+    await expect(selected).toHaveCount(3);
+
+    // A file of another change starts a new selection instead of joining it.
+    await fileRows(graphFrame, other, "x.txt").click({ modifiers: [mod] });
+    await expect(selected).toHaveCount(1);
+    await expect(fileRows(graphFrame, other, "x.txt")).toHaveAttribute("data-selected", "");
+  });
+
+  test("dragging one of several selected files moves all of them", async ({ graphFrame, testRepo }) => {
+    const target = await testRepo.commitFile("base.txt", "base", "target");
+    for (const name of ["a.txt", "b.txt", "c.txt"]) {
+      await testRepo.writeFile(name, `content ${name}`);
+    }
+    const source = await testRepo.commit("source");
+
+    await graphFrame.locator(`#nodes > div[data-change-id^="${source}/"] [data-role="files-toggle"]`).click();
+    await expect(fileRows(graphFrame, source, "c.txt")).toBeVisible();
+
+    await fileRows(graphFrame, source, "a.txt").click();
+    await fileRows(graphFrame, source, "c.txt").click({ modifiers: [mod] });
+
+    await fileRows(graphFrame, source, "c.txt").dragTo(
+      graphFrame.locator(`#nodes > div[data-change-id^="${target}/"]`),
+    );
+
+    await expect
+      .poll(async () => (await testRepo.jjCommand(["diff", "-r", target, "--name-only"])).stdout.toString())
+      .toMatch(/a\.txt[\s\S]*c\.txt/);
+    await expect(fileRows(graphFrame, source, "b.txt")).toBeVisible();
+    await expect(fileRows(graphFrame, source)).toHaveCount(1);
+  });
+
   test("dragging a file onto another change moves its changes there", async ({ graphFrame, testRepo }) => {
     const target = await testRepo.commitFile("base.txt", "base", "target");
     await testRepo.writeFile("a.txt", "content a");
@@ -109,7 +165,7 @@ test.describe("with showChangedFiles enabled by default", () => {
       .toContain("a.txt");
   });
 
-  test("showChangedFiles renders files and click opens diff", async ({ graphFrame, testRepo, workbox }) => {
+  test("showChangedFiles renders files and double-click opens diff", async ({ graphFrame, testRepo, workbox }) => {
     const changeA = await testRepo.commitFile("a.txt", "content a", "commit A");
     const changeB = await testRepo.commitFile("b.txt", "content b", "commit B");
 
@@ -120,9 +176,14 @@ test.describe("with showChangedFiles enabled by default", () => {
     await expect(fileRows(graphFrame, changeB, "b.txt")).toBeVisible();
 
     const aFile = fileRows(graphFrame, changeA, "a.txt");
-    await aFile.click();
-
     const diffEditor = workbox.locator(".editor-instance");
+    await aFile.click();
+    await expect(aFile).toHaveAttribute("data-selected", "");
+    // Longer than opening a diff takes, so a single click would have opened one by now.
+    await workbox.waitForTimeout(1000);
+    await expect(diffEditor).toHaveCount(0);
+
+    await aFile.dblclick();
     await expect(diffEditor).toBeVisible();
     // a.txt is Added in commit A: original is empty, modified contains the content.
     const original = workbox.locator(".editor.original .view-lines");
