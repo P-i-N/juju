@@ -37,6 +37,7 @@ import { joinRepositoryPath, repositoryRelativePath, toWorkspaceUri } from "./wo
 import { DEFAULT_CHANGE_DOUBLE_CLICK_ACTION, resolveDoubleClickAction } from "./double-click-action";
 
 const rootChangeId = "z".repeat(32);
+const GRAPH_TAB_VIEW_TYPE = "jjGraphTab";
 
 export interface GraphSelection {
   id: ChangeId;
@@ -57,6 +58,7 @@ export class JJGraphWebview implements vscode.WebviewViewProvider {
   }[] = [];
 
   private readonly surfaces = new Set<GraphSurface>();
+  private tab: vscode.WebviewPanel | undefined;
   private lastGraphMessage: UpdateGraphMessage | undefined;
   public repository: JJRepository | undefined;
   public selectedNodes: Set<FullChangeId> = new Set();
@@ -96,6 +98,9 @@ export class JJGraphWebview implements vscode.WebviewViewProvider {
         webviewOptions: {
           retainContextWhenHidden: true,
         },
+      }),
+      vscode.window.registerWebviewPanelSerializer(GRAPH_TAB_VIEW_TYPE, {
+        deserializeWebviewPanel: (panel) => this.restoreTab(panel),
       }),
     );
   }
@@ -150,6 +155,43 @@ export class JJGraphWebview implements vscode.WebviewViewProvider {
     surface.webview.onDidReceiveMessage((message: Message) => this.handleMessage(message, surface));
 
     this.replayTo(surface);
+  }
+
+  public openInTab(): void {
+    if (this.tab) {
+      this.tab.reveal();
+      return;
+    }
+    const panel = vscode.window.createWebviewPanel(GRAPH_TAB_VIEW_TYPE, this.surfaceTitle(), vscode.ViewColumn.Active, {
+      enableScripts: true,
+      retainContextWhenHidden: true,
+      localResourceRoots: [this.extensionUri],
+    });
+    void this.attachTab(panel);
+  }
+
+  private async restoreTab(panel: vscode.WebviewPanel): Promise<void> {
+    if (this.tab) {
+      panel.dispose();
+      return;
+    }
+    await this.attachTab(panel);
+  }
+
+  private async attachTab(panel: vscode.WebviewPanel): Promise<void> {
+    this.tab = panel;
+    panel.onDidDispose(() => {
+      if (this.tab === panel) {
+        this.tab = undefined;
+      }
+    });
+    try {
+      await this.attachSurface(panel);
+      await this.refresh();
+    } catch (error: unknown) {
+      showErrorMessage("Failed to open graph tab", error);
+      panel.dispose();
+    }
   }
 
   private replayTo(surface: GraphSurface): void {
