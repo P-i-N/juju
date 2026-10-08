@@ -376,6 +376,66 @@
           "command": "jj.openChildChange",
           "when": "jj.reposExist && !jj.comparisonDiffActive",
           "group": "navigation@3"
+        },
+        {
+          "command": "jj.openDetailsWebview",
+          "when": "activeWebviewPanelId == 'jjGraphTab'",
+          "group": "navigation@0"
+        },
+        {
+          "command": "jj.gitFetch",
+          "when": "activeWebviewPanelId == 'jjGraphTab' && !jj.fetching",
+          "group": "navigation@1"
+        },
+        {
+          "command": "jj.gitFetch.syncing",
+          "when": "activeWebviewPanelId == 'jjGraphTab' && jj.fetching",
+          "group": "navigation@1"
+        },
+        {
+          "submenu": "jj.graphFetchSubmenu",
+          "when": "activeWebviewPanelId == 'jjGraphTab' && !jj.fetchPushSyncing",
+          "group": "navigation@2"
+        },
+        {
+          "command": "jj.graphFetchSubmenu.syncing",
+          "when": "activeWebviewPanelId == 'jjGraphTab' && jj.fetchPushSyncing",
+          "group": "navigation@2"
+        },
+        {
+          "command": "jj.undo",
+          "when": "activeWebviewPanelId == 'jjGraphTab'",
+          "group": "navigation@3"
+        },
+        {
+          "command": "jj.redo",
+          "when": "activeWebviewPanelId == 'jjGraphTab'",
+          "group": "navigation@4"
+        },
+        {
+          "command": "jj.refreshGraphWebview",
+          "when": "activeWebviewPanelId == 'jjGraphTab'",
+          "group": "navigation@5"
+        },
+        {
+          "command": "jj.newGraphWebview",
+          "when": "activeWebviewPanelId == 'jjGraphTab' && jjGraphView.nodesSelected",
+          "group": "navigation@6"
+        },
+        {
+          "command": "jj.toggleElideImmutableCommits.show",
+          "when": "activeWebviewPanelId == 'jjGraphTab' && jjGraphView.elidingActive",
+          "group": "navigation@7"
+        },
+        {
+          "command": "jj.toggleElideImmutableCommits.elide",
+          "when": "activeWebviewPanelId == 'jjGraphTab' && !jjGraphView.elidingActive",
+          "group": "navigation@7"
+        },
+        {
+          "command": "jj.selectGraphWebviewRepo",
+          "when": "activeWebviewPanelId == 'jjGraphTab' && jj.hasMultipleRepos",
+          "group": "navigation@8"
         }
       ],
       "editor/context": [
@@ -474,17 +534,17 @@
       "jj.graphFetchSubmenu": [
         {
           "command": "jj.graphFetchSubmenu.fetchAllRemotes",
-          "when": "view == jjGraphWebview",
+          "when": "view == jjGraphWebview || activeWebviewPanelId == 'jjGraphTab'",
           "group": "1_fetch@1"
         },
         {
           "command": "jj.graphFetchSubmenu.fetchFromRemote",
-          "when": "view == jjGraphWebview",
+          "when": "view == jjGraphWebview || activeWebviewPanelId == 'jjGraphTab'",
           "group": "1_fetch@2"
         },
         {
           "command": "jj.graphFetchSubmenu.pushToRemote",
-          "when": "view == jjGraphWebview",
+          "when": "view == jjGraphWebview || activeWebviewPanelId == 'jjGraphTab'",
           "group": "2_push@1"
         }
       ],
