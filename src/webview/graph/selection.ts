@@ -121,6 +121,20 @@ export function lastSelectedChangeId(
 }
 
 /**
+ * Applies a selection reported by another graph surface: keeps only ids that
+ * are selectable rows of this graph and anchors range selection on the last
+ * of them.
+ */
+export function mirroredSelection(
+  changes: ChangeNode[],
+  ids: readonly FullChangeId[],
+): { selection: Set<FullChangeId>; anchor: FullChangeId | null } {
+  const { positionById } = indexSelectableChanges(changes);
+  const selection = new Set(ids.filter((id) => positionById.has(id)));
+  return { selection, anchor: lastSelectedChangeId(changes, selection) };
+}
+
+/**
  * Computes the graph selection resulting from pressing ArrowUp (`direction`
  * -1) or ArrowDown (`direction` 1):
  * - The selection moves one selectable row from the last selected change,

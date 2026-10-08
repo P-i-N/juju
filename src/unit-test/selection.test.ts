@@ -7,6 +7,7 @@ import {
   computeShiftArrowKeySelection,
   elidedRangeSelectionWarning,
   lastSelectedChangeId,
+  mirroredSelection,
 } from "../webview/graph/selection";
 import type { ChangeNode, FullChangeId, RegularChangeNode } from "../graph-protocol";
 
@@ -452,5 +453,45 @@ describe("computeShiftArrowKeySelection", () => {
     const outcome = computeShiftArrowKeySelection(changes, new Set(), null, 1);
 
     assert.equal(outcome, null);
+  });
+});
+
+describe("mirroredSelection", () => {
+  const elided = { fakeId: "~1", parentChangeIds: [], branchType: "~" } as unknown as ChangeNode;
+
+  it("returns an empty selection and no anchor for no ids", () => {
+    const changes: ChangeNode[] = [regular("a"), regular("b")];
+
+    const result = mirroredSelection(changes, []);
+
+    assert.deepEqual(Array.from(result.selection), []);
+    assert.equal(result.anchor, null);
+  });
+
+  it("keeps ids present in the graph and anchors on the last one", () => {
+    const changes: ChangeNode[] = [regular("a"), regular("b"), regular("c")];
+
+    const result = mirroredSelection(changes, [full("a"), full("c")]);
+
+    assert.deepEqual(Array.from(result.selection), [full("a"), full("c")]);
+    assert.equal(result.anchor, full("c"));
+  });
+
+  it("drops ids that are not in the graph", () => {
+    const changes: ChangeNode[] = [regular("a"), regular("b")];
+
+    const result = mirroredSelection(changes, [full("a"), full("gone")]);
+
+    assert.deepEqual(Array.from(result.selection), [full("a")]);
+    assert.equal(result.anchor, full("a"));
+  });
+
+  it("never selects elided rows", () => {
+    const changes: ChangeNode[] = [regular("a"), elided];
+
+    const result = mirroredSelection(changes, [full("~1")]);
+
+    assert.deepEqual(Array.from(result.selection), []);
+    assert.equal(result.anchor, null);
   });
 });

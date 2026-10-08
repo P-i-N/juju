@@ -195,6 +195,7 @@ export type ExtensionToWebviewMessage =
   | { command: "showJJNotFoundState" }
   | { command: "showNoRepoFoundState" }
   | { command: "showErrorState" }
+  | { command: "setSelection"; selectedNodes: FullChangeId[] }
   | { command: "diffStatsResponse"; changeId: FullChangeId; stats: DiffStats }
   | { command: "changedFilesResponse"; commitId: string; files: ChangedFile[] | null }
   | {

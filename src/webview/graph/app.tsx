@@ -14,6 +14,7 @@ import {
   isError,
   isDragging,
   selectedNodes,
+  selectionAnchorId,
   pendingGraphUpdate,
   pushingBookmarks,
   pushingTags,
@@ -45,6 +46,7 @@ import { NoRepoFoundState } from "./components/no-repo-found-state";
 import { ErrorState } from "./components/error-state";
 import { ErrorBoundary } from "./components/error-boundary";
 import type { PendingGraphUpdate } from "./signals";
+import { mirroredSelection } from "./selection";
 import { RegularChangeNode, type ExtensionToWebviewMessage } from "../../graph-protocol";
 
 export function App() {
@@ -145,6 +147,12 @@ export function App() {
         case "showErrorState":
           isError.value = true;
           break;
+        case "setSelection": {
+          const { selection, anchor } = mirroredSelection(currentChanges.value, message.selectedNodes);
+          selectedNodes.value = selection;
+          selectionAnchorId.value = anchor;
+          break;
+        }
         case "diffStatsResponse": {
           const newCache = new Map(diffStatsCache.value);
           newCache.set(message.changeId, message.stats);
