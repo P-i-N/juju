@@ -180,6 +180,8 @@ export const remoteRefContextMenu = signal<RemoteRefContextMenuState | null>(nul
 interface FileContextMenuState {
   change: RegularChangeNode;
   file: ChangedFile;
+  /** The files the menu acts on: the selection when the clicked file is part of it, otherwise just that file. */
+  files: ChangedFile[];
   clientX: number;
   clientY: number;
 }

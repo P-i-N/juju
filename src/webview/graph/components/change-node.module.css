@@ -203,14 +203,9 @@
 }
 
 .fileGroupHeader {
-  cursor: default;
   font-size: 0.85em;
   line-height: 1.6;
   opacity: 0.7;
-}
-
-.fileGroupHeader:hover {
-  background-color: transparent;
 }
 
 .fileGroupDirectory {

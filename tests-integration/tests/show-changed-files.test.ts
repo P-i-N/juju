@@ -140,16 +140,61 @@ test.describe("with showChangedFiles enabled by default", () => {
     expect(layout).toEqual(["z.txt", "[docs]", "x.md", "[src]", "a.ts", "b.ts"]);
     await expect(graphFrame.locator('[data-role="file-directory"]')).toHaveCount(0);
 
+    // Clicking a directory header selects the files under it.
     const srcHeader = graphFrame.locator(`#nodes > [data-group-of^="${change}/"][data-directory="src"]`);
     await expect(srcHeader).toHaveText("src");
     await srcHeader.click();
-    await expect(graphFrame.locator('#nodes > [data-role="changed-file"][data-selected]')).toHaveCount(0);
+    await expect(graphFrame.locator('#nodes > [data-role="changed-file"][data-selected]')).toHaveCount(2);
+    await expect(fileRows(graphFrame, change, "src/a.ts")).toHaveAttribute("data-selected", "");
+    await expect(fileRows(graphFrame, change, "src/b.ts")).toHaveAttribute("data-selected", "");
+
+    // Ctrl+clicking another header adds its files.
+    await graphFrame
+      .locator(`#nodes > [data-group-of^="${change}/"][data-directory="docs"]`)
+      .click({ modifiers: [mod] });
+    await expect(graphFrame.locator('#nodes > [data-role="changed-file"][data-selected]')).toHaveCount(3);
 
     // A range follows the displayed order across directories.
     await fileRows(graphFrame, change, "z.txt").click();
     await fileRows(graphFrame, change, "src/a.ts").click({ modifiers: ["Shift"] });
     await expect(graphFrame.locator('#nodes > [data-role="changed-file"][data-selected]')).toHaveCount(3);
     await expect(fileRows(graphFrame, change, "src/b.ts")).not.toHaveAttribute("data-selected", "");
+  });
+
+  test("Discard Changes removes the selected files' changes from the change", async ({
+    graphFrame,
+    testRepo,
+    workbox,
+  }) => {
+    await testRepo.commitFile("base.txt", "base", "base");
+    for (const name of ["a.txt", "b.txt", "c.txt"]) {
+      await testRepo.writeFile(name, `content ${name}`);
+    }
+    const change = await testRepo.commit("three files");
+
+    await graphFrame.locator(`#nodes > div[data-change-id^="${change}/"] [data-role="files-toggle"]`).click();
+    await expect(fileRows(graphFrame, change)).toHaveCount(3);
+
+    // Right-clicking a file outside the selection selects just that file.
+    await fileRows(graphFrame, change, "a.txt").click();
+    await fileRows(graphFrame, change, "b.txt").click({ button: "right" });
+    await expect(graphFrame.locator("#file-context-menu")).toBeVisible();
+    await expect(fileRows(graphFrame, change, "b.txt")).toHaveAttribute("data-selected", "");
+    await expect(fileRows(graphFrame, change, "a.txt")).not.toHaveAttribute("data-selected", "");
+    await workbox.keyboard.press("Escape");
+
+    await fileRows(graphFrame, change, "a.txt").click();
+    await fileRows(graphFrame, change, "c.txt").click({ modifiers: [mod] });
+    await clickFileMenuItem(graphFrame, fileRows(graphFrame, change, "c.txt"), "Discard Changes");
+
+    const dialog = workbox.locator(".monaco-dialog-box");
+    await expect(dialog).toContainText("Are you sure you want to discard changes in 2 files?");
+    await dialog.getByRole("button", { name: "Discard" }).click();
+
+    await expect
+      .poll(async () => (await testRepo.jjCommand(["diff", "-r", change, "--name-only"])).stdout.toString().trim())
+      .toBe("b.txt");
+    await expect(fileRows(graphFrame, change)).toHaveCount(1);
   });
 
   test("dragging one of several selected files moves all of them", async ({ graphFrame, testRepo }) => {
@@ -301,6 +346,7 @@ test.describe("with showChangedFiles enabled by default", () => {
         "Open File",
         "Copy Path",
         "Copy Relative Path",
+        "Discard Changes",
       ]);
       await graphFrame.locator("#nodes > div").first().click();
       await expect(menu).not.toBeVisible();
@@ -316,6 +362,7 @@ test.describe("with showChangedFiles enabled by default", () => {
         "Open File in Working Copy",
         "Copy Path",
         "Copy Relative Path",
+        "Discard Changes",
       ]);
       await graphFrame.locator("#nodes > div").first().click();
       await expect(menu).not.toBeVisible();

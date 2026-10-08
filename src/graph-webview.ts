@@ -620,6 +620,29 @@ export class JJGraphWebview implements vscode.WebviewViewProvider {
             }),
           );
           break;
+        case "discardFileChanges": {
+          const [first] = message.files;
+          if (!first) {
+            break;
+          }
+          const confirmMessage =
+            message.files.length === 1
+              ? `Are you sure you want to discard changes in '${first.path}'?`
+              : `Are you sure you want to discard changes in ${message.files.length} files?`;
+          const confirm = await vscode.window.showWarningMessage(confirmMessage, { modal: true }, "Discard");
+          if (confirm !== "Discard") {
+            break;
+          }
+          await this.withRefresh("discard changes", () =>
+            repo.restoreRetryImmutable(
+              message.changeId,
+              message.files
+                .flatMap((f) => [f.path, ...(f.renamedFrom !== undefined ? [f.renamedFrom] : [])])
+                .map((p) => joinRepositoryPath(repo.repositoryRoot, p)),
+            ),
+          );
+          break;
+        }
         case "moveFileChangesToNewChange":
           await this.withRefresh("move file changes to a new change", async () => {
             const newChangeId = await repo.newAtNoEditRetryImmutable(message.targetChangeId, message.position);

@@ -57,3 +57,30 @@ export function draggedFilePaths(
   }
   return orderedPaths.filter((path) => current.paths.has(path));
 }
+
+/**
+ * The file selection after clicking a directory header: a plain click selects
+ * just the directory's files, Ctrl/Cmd adds them to the selection of the same
+ * change, or removes them when they are all selected already.
+ */
+export function selectFileGroup(
+  current: FileSelection | null,
+  changeId: FullChangeId,
+  groupPaths: readonly string[],
+  toggleKey: boolean,
+): FileSelection | null {
+  const [first] = groupPaths;
+  if (first === undefined) {
+    return current;
+  }
+  if (!toggleKey || current?.changeId !== changeId) {
+    return { changeId, paths: new Set(groupPaths), anchor: first };
+  }
+  const paths = new Set(current.paths);
+  if (groupPaths.every((path) => paths.has(path))) {
+    groupPaths.forEach((path) => paths.delete(path));
+    return paths.size === 0 ? null : { changeId, paths, anchor: current.anchor };
+  }
+  groupPaths.forEach((path) => paths.add(path));
+  return { changeId, paths, anchor: first };
+}

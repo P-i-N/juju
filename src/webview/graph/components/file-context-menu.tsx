@@ -5,14 +5,15 @@ import { Menu, MenuItem, MenuSeparator } from "./menu-container";
 // the working-copy group shows "Open File" (the working-copy file itself) while
 // other groups additionally offer "Open File in Working Copy". "Open File" is
 // omitted for deleted files outside the working copy because they do not exist
-// at their own revision.
+// at their own revision. "Discard Changes" is an inline action of the SCM
+// view; here it acts on every selected file.
 export function FileContextMenu() {
   const state = fileContextMenu.value;
   if (!state) {
     return null;
   }
 
-  const { change, file } = state;
+  const { change, file, files } = state;
   const isWorkingCopy = change.currentWorkingCopy;
 
   return (
@@ -72,6 +73,20 @@ export function FileContextMenu() {
         }}
       >
         Copy Relative Path
+      </MenuItem>
+      <MenuSeparator />
+      <MenuItem
+        action="discardChanges"
+        onClick={() => {
+          postMessage({
+            command: "discardFileChanges",
+            changeId: change.id.changeId,
+            files: files.map((f) => ({ path: f.path, ...(f.renamedFrom ? { renamedFrom: f.renamedFrom } : {}) })),
+          });
+          fileContextMenu.value = null;
+        }}
+      >
+        Discard Changes
       </MenuItem>
     </Menu>
   );

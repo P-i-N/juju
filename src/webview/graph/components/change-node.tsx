@@ -57,7 +57,7 @@ import {
   visibleDropTargetId,
 } from "../signals";
 import { computeSelection } from "../selection";
-import { computeFileSelection, draggedFilePaths } from "../file-selection";
+import { computeFileSelection, draggedFilePaths, selectFileGroup } from "../file-selection";
 import { fileNameOf, groupChangedFiles } from "../changed-file-groups";
 import { edgeCursorFor, type EdgeCursor } from "../insert-edges";
 import { clearHoveredEdge, insertSideAt, updateHoveredEdge } from "../edge-hover";
@@ -784,6 +784,17 @@ const MemoizedChangedFileRows = memo(function ChangedFileRows({
               class={cx(styles.fileRow, styles.fileGroupHeader)}
               style={fileRowStyle(graphW)}
               title={group.directory}
+              onClick={(e) => {
+                if (isDragging.value || justFinishedDrag.value) {
+                  return;
+                }
+                selectedFiles.value = selectFileGroup(
+                  selectedFiles.value,
+                  change.id.changeId,
+                  group.files.map((f) => f.path),
+                  e.ctrlKey || e.metaKey,
+                );
+              }}
               data-role="changed-file-group"
               data-group-of={change.id.changeId}
               data-directory={group.directory}
@@ -873,9 +884,15 @@ Double-click to open diff`}
         e.preventDefault();
         e.stopPropagation();
         closeAllMenus();
+        const current = selectedFiles.value;
+        const inSelection = current?.changeId === change.id.changeId && current.paths.has(file.path);
+        if (!inSelection) {
+          selectedFiles.value = { changeId: change.id.changeId, paths: new Set([file.path]), anchor: file.path };
+        }
         fileContextMenu.value = {
           change,
           file,
+          files: inSelection ? files.filter((f) => current.paths.has(f.path)) : [file],
           clientX: e.clientX,
           clientY: e.clientY,
         };

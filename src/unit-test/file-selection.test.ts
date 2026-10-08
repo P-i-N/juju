@@ -1,7 +1,12 @@
 /* eslint-disable @typescript-eslint/no-floating-promises */
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { computeFileSelection, draggedFilePaths, type FileSelection } from "../webview/graph/file-selection";
+import {
+  computeFileSelection,
+  draggedFilePaths,
+  selectFileGroup,
+  type FileSelection,
+} from "../webview/graph/file-selection";
 import type { FullChangeId } from "../graph-protocol";
 
 function full(id: string): FullChangeId {
@@ -113,5 +118,36 @@ describe("draggedFilePaths", () => {
 
   it("drags only the dragged file without a selection", () => {
     assert.deepEqual(draggedFilePaths(null, full("x"), files, "a.txt"), ["a.txt"]);
+  });
+});
+
+describe("selectFileGroup", () => {
+  const group = ["b.txt", "c.txt"];
+
+  it("selects just the group on plain click", () => {
+    const result = selectFileGroup(selection("x", ["a.txt"], "a.txt"), full("x"), group, false);
+    assert.deepEqual(paths(result), ["b.txt", "c.txt"]);
+    assert.equal(result?.anchor, "b.txt");
+  });
+
+  it("adds the group to the selection of the same change on ctrl+click", () => {
+    const result = selectFileGroup(selection("x", ["a.txt", "b.txt"], "a.txt"), full("x"), group, true);
+    assert.deepEqual(paths(result), ["a.txt", "b.txt", "c.txt"]);
+  });
+
+  it("removes a fully selected group on ctrl+click", () => {
+    const result = selectFileGroup(selection("x", ["a.txt", "b.txt", "c.txt"], "a.txt"), full("x"), group, true);
+    assert.deepEqual(paths(result), ["a.txt"]);
+    assert.equal(result?.anchor, "a.txt");
+  });
+
+  it("clears the selection when ctrl+click removes everything", () => {
+    assert.equal(selectFileGroup(selection("x", group, "b.txt"), full("x"), group, true), null);
+  });
+
+  it("starts a new selection on ctrl+click in another change", () => {
+    const result = selectFileGroup(selection("y", ["a.txt"], "a.txt"), full("x"), group, true);
+    assert.deepEqual(paths(result), ["b.txt", "c.txt"]);
+    assert.equal(result?.changeId, full("x"));
   });
 });
