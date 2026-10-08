@@ -148,15 +148,18 @@ export class JJGraphWebview implements vscode.WebviewViewProvider {
       return;
     }
 
+    surface.webview.onDidReceiveMessage((message: Message) => this.handleMessage(message, surface));
+
+    this.sendCurrentState(surface);
+  }
+
+  private sendCurrentState(surface: GraphSurface): void {
     if (!this.repository) {
       const msg: ExtensionToWebviewMessage = this.jjBinaryNotFound
         ? { command: "showJJNotFoundState" }
         : { command: "showNoRepoFoundState" };
       this.postMessageToSurface(surface, msg);
     }
-
-    surface.webview.onDidReceiveMessage((message: Message) => this.handleMessage(message, surface));
-
     this.replayTo(surface);
   }
 
@@ -207,6 +210,10 @@ export class JJGraphWebview implements vscode.WebviewViewProvider {
   }
 
   private async handleMessage(message: Message, source: GraphSurface): Promise<void> {
+    if (message.command === "webviewReady") {
+      this.sendCurrentState(source);
+      return;
+    }
     if (
       !this.repository &&
       message.command !== "selectChange" &&
