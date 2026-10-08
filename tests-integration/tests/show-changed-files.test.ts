@@ -119,6 +119,39 @@ test.describe("with showChangedFiles enabled by default", () => {
     await expect(fileRows(graphFrame, other, "x.txt")).toHaveAttribute("data-selected", "");
   });
 
+  test("changed files are grouped under their directory", async ({ graphFrame, testRepo }) => {
+    for (const name of ["z.txt", "src/b.ts", "src/a.ts", "docs/x.md"]) {
+      await testRepo.writeFile(name, `content ${name}`);
+    }
+    const change = await testRepo.commit("grouped");
+
+    await graphFrame.locator(`#nodes > div[data-change-id^="${change}/"] [data-role="files-toggle"]`).click();
+    await expect(fileRows(graphFrame, change)).toHaveCount(4);
+
+    const layout = await graphFrame
+      .locator(`#nodes > [data-group-of^="${change}/"], #nodes > [data-file-of^="${change}/"]`)
+      .evaluateAll((rows) =>
+        rows.map((row) =>
+          row.getAttribute("data-role") === "changed-file-group"
+            ? `[${row.getAttribute("data-directory")}]`
+            : row.querySelector('[data-role="file-name"]')!.textContent,
+        ),
+      );
+    expect(layout).toEqual(["z.txt", "[docs]", "x.md", "[src]", "a.ts", "b.ts"]);
+    await expect(graphFrame.locator('[data-role="file-directory"]')).toHaveCount(0);
+
+    const srcHeader = graphFrame.locator(`#nodes > [data-group-of^="${change}/"][data-directory="src"]`);
+    await expect(srcHeader).toHaveText("src");
+    await srcHeader.click();
+    await expect(graphFrame.locator('#nodes > [data-role="changed-file"][data-selected]')).toHaveCount(0);
+
+    // A range follows the displayed order across directories.
+    await fileRows(graphFrame, change, "z.txt").click();
+    await fileRows(graphFrame, change, "src/a.ts").click({ modifiers: ["Shift"] });
+    await expect(graphFrame.locator('#nodes > [data-role="changed-file"][data-selected]')).toHaveCount(3);
+    await expect(fileRows(graphFrame, change, "src/b.ts")).not.toHaveAttribute("data-selected", "");
+  });
+
   test("dragging one of several selected files moves all of them", async ({ graphFrame, testRepo }) => {
     const target = await testRepo.commitFile("base.txt", "base", "target");
     for (const name of ["a.txt", "b.txt", "c.txt"]) {

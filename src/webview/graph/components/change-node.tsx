@@ -1,6 +1,6 @@
 import { signal, useComputed, type ReadonlySignal } from "@preact/signals";
 import { type HTMLAttributes, type RefObject } from "preact";
-import { memo } from "preact/compat";
+import { Fragment, memo } from "preact/compat";
 import { useMemo } from "preact/hooks";
 import { editChange } from "../edit-change";
 import { dropOnEdge, useDragDrop } from "../hooks/use-drag-drop";
@@ -58,6 +58,7 @@ import {
 } from "../signals";
 import { computeSelection } from "../selection";
 import { computeFileSelection, draggedFilePaths } from "../file-selection";
+import { fileNameOf, groupChangedFiles } from "../changed-file-groups";
 import { edgeCursorFor, type EdgeCursor } from "../insert-edges";
 import { clearHoveredEdge, insertSideAt, updateHoveredEdge } from "../edge-hover";
 import { SWIMLANE_WIDTH, CHANGE_ID_RIGHT_PADDING, rootChangeId } from "../types";
@@ -771,17 +772,37 @@ const MemoizedChangedFileRows = memo(function ChangedFileRows({
   graphW: number;
   bottomEdge: FileAreaEdge;
 }) {
+  const groups = groupChangedFiles(files);
+  const ordered = groups.flatMap((g) => g.files);
+  const last = ordered.at(-1);
   return (
     <>
-      {files.map((f, i) => (
-        <FileRow
-          key={f.path}
-          change={change}
-          file={f}
-          files={files}
-          graphW={graphW}
-          bottomEdge={i === files.length - 1 ? bottomEdge : undefined}
-        />
+      {groups.map((group) => (
+        <Fragment key={group.directory}>
+          {group.directory !== "" && (
+            <div
+              class={cx(styles.fileRow, styles.fileGroupHeader)}
+              style={fileRowStyle(graphW)}
+              title={group.directory}
+              data-role="changed-file-group"
+              data-group-of={change.id.changeId}
+              data-directory={group.directory}
+            >
+              <span class={styles.fileGroupDirectory}>{group.directory}</span>
+            </div>
+          )}
+          {group.files.map((f) => (
+            <FileRow
+              key={f.path}
+              change={change}
+              file={f}
+              files={ordered}
+              grouped={group.directory !== ""}
+              graphW={graphW}
+              bottomEdge={f === last ? bottomEdge : undefined}
+            />
+          ))}
+        </Fragment>
       ))}
     </>
   );
@@ -791,12 +812,14 @@ function FileRow({
   change,
   file,
   files,
+  grouped,
   graphW,
   bottomEdge,
 }: {
   change: RegularChangeNode;
   file: ChangedFile;
   files: ChangedFile[];
+  grouped: boolean;
   graphW: number;
   bottomEdge?: FileAreaEdge;
 }) {
@@ -806,14 +829,12 @@ function FileRow({
   const selected = selection?.changeId === change.id.changeId && selection.paths.has(file.path);
   const isInsertEdgeEvent = (e: MouseEvent) =>
     !!bottomEdge && (e.ctrlKey || e.metaKey) && insertSideAt(change, e, "bottom") !== null;
-  const separator = file.path.lastIndexOf("/");
-  const fileName = file.path.slice(separator + 1);
-  const directory = separator === -1 ? "" : file.path.slice(0, separator);
   return (
     <div
-      class={cx(styles.fileRow, selected && styles.selected, edgeClass)}
+      class={cx(styles.fileRow, grouped && styles.groupedFileRow, selected && styles.selected, edgeClass)}
       style={fileRowStyle(graphW)}
-      title="Double-click to open diff"
+      title={`${file.path}
+Double-click to open diff`}
       data-role="changed-file"
       data-file-of={change.id.changeId}
       data-path={file.path}
@@ -900,10 +921,7 @@ function FileRow({
       }}
     >
       <span class={styles.fileName} data-role="file-name">
-        {fileName}
-      </span>
-      <span class={styles.fileDirectory} data-role="file-directory">
-        {directory}
+        {fileNameOf(file.path)}
       </span>
       <span class={styles.fileStatus} data-role="file-status">
         {file.type}

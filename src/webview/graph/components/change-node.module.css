@@ -174,7 +174,7 @@
   cursor: pointer;
   padding-left: calc(
     var(--change-id-ch-width, 4ch) + var(--change-id-offset-width, 0ch) + var(--change-id-right-padding) +
-      var(--graph-width) + 4px + 18px
+      var(--graph-width) + 4px + 18px + var(--file-indent, 0px)
   );
   line-height: 1.6;
   user-select: none;
@@ -198,24 +198,39 @@
   background-color: transparent;
 }
 
-.fileName {
-  flex-shrink: 0;
+.groupedFileRow {
+  --file-indent: 10px;
+}
+
+.fileGroupHeader {
+  cursor: default;
+  font-size: 0.85em;
+  line-height: 1.6;
+  opacity: 0.7;
+}
+
+.fileGroupHeader:hover {
+  background-color: transparent;
+}
+
+.fileGroupDirectory {
+  min-width: 0;
+  padding-right: 12px;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.fileName {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .fileRow[data-status="d"] .fileName {
   text-decoration: line-through;
-}
-
-.fileDirectory {
-  flex: 1;
-  min-width: 0;
-  margin-left: 0.5em;
-  color: var(--vscode-foreground);
-  opacity: 0.7;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .fileStatus {
