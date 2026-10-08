@@ -7,13 +7,22 @@ interface LocalPillProps extends HTMLAttributes<HTMLSpanElement> {
   synced: boolean;
 }
 
-export function BookmarkPill({ conflict, synced, ...rest }: LocalPillProps) {
+export function BookmarkPill({ conflict, synced, dragSource, ...rest }: LocalPillProps & { dragSource?: boolean }) {
   return (
     <span
-      class={cx(styles.pill, styles.bookmarkPill, conflict ? styles.conflicted : !synced && styles.unsynced)}
+      class={cx(
+        styles.pill,
+        styles.bookmarkPill,
+        conflict ? styles.conflicted : !synced && styles.unsynced,
+        dragSource && styles.dragSource,
+      )}
       {...rest}
     />
   );
+}
+
+export function BookmarkPreviewPill({ ...rest }: HTMLAttributes<HTMLSpanElement>) {
+  return <span class={cx(styles.pill, styles.bookmarkPill, styles.dropPreview)} {...rest} />;
 }
 
 export function TagPill({ conflict, synced, ...rest }: LocalPillProps) {

@@ -1,4 +1,4 @@
-import { signal } from "@preact/signals";
+import { computed, signal } from "@preact/signals";
 import type { VSCodeAPI } from "./types";
 import type {
   ChangeNode,
@@ -30,6 +30,20 @@ export const isDragging = signal(false);
 export const dragStartChangeId = signal<string | null>(null);
 export const dragBookmarkName = signal<string | null>(null);
 export const dropTargetId = signal<string | null>(null);
+export const bookmarkDropPreviewTargetId = computed(() => {
+  const name = dragBookmarkName.value;
+  const targetId = dropTargetId.value;
+  if (!name || !targetId) {
+    return null;
+  }
+  const target = currentChanges.value.find(
+    (c): c is RegularChangeNode => c.branchType !== "~" && c.id.changeId === targetId,
+  );
+  if (!target || target.localBookmarks.some((b) => b.name === name)) {
+    return null;
+  }
+  return targetId;
+});
 export const hoveredChangeId = signal<string | null>(null);
 export const justFinishedDrag = signal(false);
 export const maxPrefixLength = signal(4);

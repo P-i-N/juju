@@ -5,7 +5,15 @@ import { editChange } from "../edit-change";
 import { useDragDrop } from "../hooks/use-drag-drop";
 import { createTooltipTimers } from "../hooks/tooltip-timers";
 import dragGhostStyles from "./drag-ghost.module.css";
-import { BookmarkPill, BookmarkPushIcon, RemoteBookmarkPill, RemoteTagPill, TagPill, WorkspacePill } from "./pill";
+import {
+  BookmarkPill,
+  BookmarkPreviewPill,
+  BookmarkPushIcon,
+  RemoteBookmarkPill,
+  RemoteTagPill,
+  TagPill,
+  WorkspacePill,
+} from "./pill";
 import styles from "./change-node.module.css";
 import {
   selectedNodes,
@@ -15,6 +23,7 @@ import {
   isDragging,
   justFinishedDrag,
   dropTargetId,
+  bookmarkDropPreviewTargetId,
   graphStyle,
   postMessage,
   showTooltips,
@@ -53,6 +62,9 @@ import {
   type RegularChangeNode,
 } from "../../../graph-protocol";
 import { abbreviateName, cx, escapeInvisibleChars } from "../utils";
+
+const transparentDragImage = new Image();
+transparentDragImage.src = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
 
 function shouldShowTooltip(change: ChangeNode): change is RegularChangeNode {
   return change.branchType !== "~" && change.id.changeId !== rootChangeId;
@@ -283,6 +295,14 @@ const ElidedTextContent = memo(function ElidedTextContent({ graphW }: { graphW: 
   );
 });
 
+function BookmarkDropPreview({ changeId }: { changeId: string }) {
+  const name = dragBookmarkName.value;
+  if (!name || bookmarkDropPreviewTargetId.value !== changeId) {
+    return null;
+  }
+  return <BookmarkPreviewPill data-bookmark-preview={name}>{abbreviateName(name)}</BookmarkPreviewPill>;
+}
+
 const MemoizedChangeNodeTextContent = memo(function ChangeNodeTextContent({
   change,
   graphW,
@@ -342,6 +362,7 @@ const MemoizedChangeNodeTextContent = memo(function ChangeNodeTextContent({
             data-unsynced={!b.synced && !b.conflict ? "" : undefined}
             data-conflicted={b.conflict ? "" : undefined}
             draggable={!pushingBookmarks.value.has(b.name)}
+            dragSource={dragBookmarkName.value === b.name}
             onContextMenu={(e) => {
               e.preventDefault();
               e.stopPropagation();
@@ -374,13 +395,7 @@ const MemoizedChangeNodeTextContent = memo(function ChangeNodeTextContent({
               tooltip.value = null;
               e.dataTransfer!.setData("text/plain", "");
               e.dataTransfer!.effectAllowed = "move";
-
-              const ghost = document.createElement("div");
-              ghost.className = cx(dragGhostStyles.dragGhost, dragGhostStyles.bookmarkDragGhost);
-              ghost.textContent = escapeInvisibleChars(b.name);
-              document.body.appendChild(ghost);
-              e.dataTransfer!.setDragImage(ghost, -15, 0);
-              setTimeout(() => ghost.remove(), 0);
+              e.dataTransfer!.setDragImage(transparentDragImage, 0, 0);
             }}
             onDragEnd={(e) => {
               e.stopPropagation();
@@ -408,6 +423,7 @@ const MemoizedChangeNodeTextContent = memo(function ChangeNodeTextContent({
             {abbreviateName(b.name)}
           </BookmarkPill>
         ))}
+        <BookmarkDropPreview changeId={change.id.changeId} />
         {change.remoteBookmarks
           .filter((b) => !localBookmarkNames.has(b.name))
           .map((b) => (

@@ -68,12 +68,47 @@ test("drop target highlight follows a dragged bookmark across adjacent rows", as
   const bookmarkPill = graphFrame.locator('[data-bookmark="test-bookmark"]');
   await expect(commitA.locator('[data-bookmark="test-bookmark"]')).toBeVisible();
 
+  const restingBackground = await bookmarkPill.evaluate((el) => getComputedStyle(el).backgroundColor);
+
   await dragAcrossAdjacentRows(workbox, bookmarkPill, commitB, commitC);
 
   await expect(commitC).toHaveCSS("outline-style", "solid");
   await expect(commitB).toHaveCSS("outline-style", "none");
 
+  await expect(bookmarkPill).not.toHaveCSS("background-color", restingBackground);
+  const preview = graphFrame.locator('[data-bookmark-preview="test-bookmark"]');
+  await expect(preview).toHaveCount(1);
+  await expect(commitC.locator('[data-bookmark-preview="test-bookmark"]')).toBeVisible();
+  await expect(preview).toHaveCSS("opacity", "0.5");
+
   await workbox.mouse.up();
 
   await expect(commitC.locator('[data-bookmark="test-bookmark"]')).toBeVisible();
+  await expect(preview).toHaveCount(0);
+  await expect(bookmarkPill).toHaveCSS("background-color", restingBackground);
+});
+
+test("no drop preview is shown on the change that already has the dragged bookmark", async ({
+  graphFrame,
+  testRepo,
+  workbox,
+}) => {
+  await setupCommits(testRepo);
+  await testRepo.jjCommand(["bookmark", "create", "test-bookmark", "-r", "@-"]);
+
+  const nodes = graphFrame.locator("#nodes > div");
+  await expect(nodes).toHaveCount(5);
+
+  const commitC = nodes.nth(1);
+  const commitB = nodes.nth(2);
+  const bookmarkPill = graphFrame.locator('[data-bookmark="test-bookmark"]');
+  await expect(bookmarkPill).toBeVisible();
+
+  await dragAcrossAdjacentRows(workbox, bookmarkPill, commitB, commitC);
+
+  await expect(commitC).toHaveCSS("outline-style", "solid");
+  await expect(graphFrame.locator("[data-bookmark-preview]")).toHaveCount(0);
+
+  await workbox.mouse.move(0, 0);
+  await workbox.mouse.up();
 });
