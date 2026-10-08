@@ -154,6 +154,10 @@ test.describe("with showChangedFiles enabled by default", () => {
       .click({ modifiers: [mod] });
     await expect(graphFrame.locator('#nodes > [data-role="changed-file"][data-selected]')).toHaveCount(3);
 
+    // Clicking a header while any file under it is selected clears the selection.
+    await srcHeader.click();
+    await expect(graphFrame.locator('#nodes > [data-role="changed-file"][data-selected]')).toHaveCount(0);
+
     // A range follows the displayed order across directories.
     await fileRows(graphFrame, change, "z.txt").click();
     await fileRows(graphFrame, change, "src/a.ts").click({ modifiers: ["Shift"] });

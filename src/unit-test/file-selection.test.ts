@@ -124,19 +124,33 @@ describe("draggedFilePaths", () => {
 describe("selectFileGroup", () => {
   const group = ["b.txt", "c.txt"];
 
-  it("selects just the group on plain click", () => {
+  it("selects just the group on plain click when none of it is selected", () => {
     const result = selectFileGroup(selection("x", ["a.txt"], "a.txt"), full("x"), group, false);
     assert.deepEqual(paths(result), ["b.txt", "c.txt"]);
     assert.equal(result?.anchor, "b.txt");
   });
 
+  it("clears the whole selection on plain click when part of the group is selected", () => {
+    assert.equal(selectFileGroup(selection("x", ["a.txt", "c.txt"], "a.txt"), full("x"), group, false), null);
+  });
+
+  it("clears the whole selection on plain click when the group is selected", () => {
+    assert.equal(selectFileGroup(selection("x", group, "b.txt"), full("x"), group, false), null);
+  });
+
+  it("selects the group on plain click when the selection belongs to another change", () => {
+    const result = selectFileGroup(selection("y", ["b.txt"], "b.txt"), full("x"), group, false);
+    assert.deepEqual(paths(result), ["b.txt", "c.txt"]);
+    assert.equal(result?.changeId, full("x"));
+  });
+
   it("adds the group to the selection of the same change on ctrl+click", () => {
-    const result = selectFileGroup(selection("x", ["a.txt", "b.txt"], "a.txt"), full("x"), group, true);
+    const result = selectFileGroup(selection("x", ["a.txt"], "a.txt"), full("x"), group, true);
     assert.deepEqual(paths(result), ["a.txt", "b.txt", "c.txt"]);
   });
 
-  it("removes a fully selected group on ctrl+click", () => {
-    const result = selectFileGroup(selection("x", ["a.txt", "b.txt", "c.txt"], "a.txt"), full("x"), group, true);
+  it("removes the group on ctrl+click when part of it is selected", () => {
+    const result = selectFileGroup(selection("x", ["a.txt", "b.txt"], "a.txt"), full("x"), group, true);
     assert.deepEqual(paths(result), ["a.txt"]);
     assert.equal(result?.anchor, "a.txt");
   });
