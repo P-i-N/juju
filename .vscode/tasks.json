@@ -90,5 +90,32 @@
                 "reveal": "never"
             }
         },
+        {
+            "label": "build: production",
+            "type": "process",
+            "command": "node",
+            "args": ["esbuild.js", "--production"],
+            "options": { "cwd": "${workspaceFolder}" },
+            "group": "build",
+            "problemMatcher": {
+                "owner": "esbuild",
+                "source": "esbuild",
+                "fileLocation": ["relative", "${workspaceFolder}"],
+                "pattern": [
+                    { "regexp": "^✘ \\[ERROR\\] (.+)$", "message": 1 },
+                    { "regexp": "^\\s+(.+):(\\d+):(\\d+):$", "file": 1, "line": 2, "column": 3 }
+                ]
+            }
+        },
+        {
+            "label": "package: vsix",
+            "type": "process",
+            "command": "node",
+            "args": ["node_modules/@vscode/vsce/vsce", "package", "--no-dependencies", "--allow-star-activation"],
+            "options": { "cwd": "${workspaceFolder}" },
+            "dependsOn": ["build: production"],
+            "group": "build",
+            "problemMatcher": []
+        },
 	]
 }
