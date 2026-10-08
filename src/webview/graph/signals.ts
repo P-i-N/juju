@@ -2,6 +2,7 @@ import { computed, signal } from "@preact/signals";
 import type { VSCodeAPI } from "./types";
 import { computeEdgeHighlight, type HoveredEdge } from "./insert-edges";
 import type { FileSelection } from "./file-selection";
+import { DEFAULT_CHANGE_DOUBLE_CLICK_ACTION } from "../../double-click-action";
 import type {
   ChangeNode,
   ChangeIdGraph,
@@ -75,7 +76,7 @@ export const isJJNotFound = signal(false);
 export const isNoRepoFound = signal(false);
 export const isError = signal(false);
 export const graphStyle = signal("full");
-export const changeDoubleClickAction = signal("new");
+export const changeDoubleClickAction = signal<string>(DEFAULT_CHANGE_DOUBLE_CLICK_ACTION);
 export const showTooltips = signal(true);
 export const showChangedFiles = signal(false);
 export const expandedFileLists = signal<Set<FullChangeId>>(new Set());

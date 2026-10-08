@@ -1,4 +1,5 @@
 import type { RegularChangeNode } from "../../graph-protocol";
+import { resolveDoubleClickAction } from "../../double-click-action";
 import { changeDoubleClickAction, postMessage } from "./signals";
 
 /**
@@ -6,7 +7,8 @@ import { changeDoubleClickAction, postMessage } from "./signals";
  * Returns whether a message was sent to the extension host.
  */
 export function editChange(change: RegularChangeNode): boolean {
-  if (change.currentWorkingCopy && (changeDoubleClickAction.value !== "new" || change.isEmpty)) {
+  const target = { ...change, changeId: change.id.changeId };
+  if (resolveDoubleClickAction(target, changeDoubleClickAction.value) === null) {
     return false;
   }
   postMessage({ command: "editChange", changeId: change.id.changeId });

@@ -165,24 +165,24 @@ system.
 
 The following settings can be configured in VS Code's settings:
 
-| Setting                              | Default     | Description                                                                                                                                                    |
-| ------------------------------------ | ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `juju.autoSwitchRepository`          | `true`      | Automatically switch the repository shown in the JJ Graph and Operation Log views to the repository containing the active editor                               |
-| `juju.autoUpdateStaleWorkspace`      | `true`      | Automatically run `jj workspace update-stale` when the current workspace is stale                                                                              |
-| `juju.baseWebURL`                    | `""`        | Base URL for the 'Copy URL' feature (e.g., `https://github.com/user/repo`). Overrides `git_web_url()` when set                                                 |
-| `juju.changeDoubleClickAction`       | `"new"`     | Action when double-clicking a change in the graph view: `"edit"` (jj edit) or `"new"` (jj new)                                                                 |
-| `juju.commandTimeout`                | `null`      | Global timeout in milliseconds for all jj commands. If not set, per-command defaults will be used                                                              |
-| `juju.commitAction`                  | `"commit"`  | Action when pressing Ctrl+Enter in source control: `"commit"` (jj commit) or `"new"` (jj new). Ctrl+Shift+Enter does the same but also opens an editor         |
-| `juju.elideImmutableCommits`         | `true`      | Hide chains of immutable commits between relevant commits in the graph view                                                                                    |
-| `juju.elidedVisibleImmutableParents` | `1`         | Number of immutable parent commits to show in the log when eliding commits                                                                                     |
-| `juju.enableAnnotations`             | `true`      | Enables in-line blame annotations                                                                                                                              |
-| `juju.fileClickAction`               | `"diff"`    | Action when clicking a file: `"diff"` (compare to parent), `"at-revision"` (open at clicked revision), or `"working-copy"` (open in working copy)              |
-| `juju.graphStyle`                    | `"compact"` | Display style for commits: `"full"` shows all details, `"compact"` shows single line                                                                           |
-| `juju.jjPath`                        | `""`        | Path to the jj executable. If not set, your PATH and common locations will be searched                                                                         |
-| `juju.logLimit`                      | `500`       | Maximum number of commits shown in the graph view                                                                                                              |
-| `juju.pollIntervalSeconds`           | `30`        | Interval in seconds between repository polls. Set to 0 to disable                                                                                              |
-| `juju.showChangedFiles`              | `true`      | ⚠️ Experimental: Show an expandable list of changed files for each commit in the graph (similar to `jj log -s`). Clicking a file opens a diff at that revision |
-| `juju.showTooltips`                  | `true`      | Show tooltips when hovering over commits in the graph view                                                                                                     |
+| Setting                              | Default                | Description                                                                                                                                                                           |
+| ------------------------------------ | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `juju.autoSwitchRepository`          | `true`                 | Automatically switch the repository shown in the JJ Graph and Operation Log views to the repository containing the active editor                                                      |
+| `juju.autoUpdateStaleWorkspace`      | `true`                 | Automatically run `jj workspace update-stale` when the current workspace is stale                                                                                                     |
+| `juju.baseWebURL`                    | `""`                   | Base URL for the 'Copy URL' feature (e.g., `https://github.com/user/repo`). Overrides `git_web_url()` when set                                                                        |
+| `juju.changeDoubleClickAction`       | `"newEditUndescribed"` | Action when double-clicking a change in the graph view: `"edit"` (jj edit), `"new"` (jj new), or `"newEditUndescribed"` (jj edit for changes without a description, jj new otherwise) |
+| `juju.commandTimeout`                | `null`                 | Global timeout in milliseconds for all jj commands. If not set, per-command defaults will be used                                                                                     |
+| `juju.commitAction`                  | `"commit"`             | Action when pressing Ctrl+Enter in source control: `"commit"` (jj commit) or `"new"` (jj new). Ctrl+Shift+Enter does the same but also opens an editor                                |
+| `juju.elideImmutableCommits`         | `true`                 | Hide chains of immutable commits between relevant commits in the graph view                                                                                                           |
+| `juju.elidedVisibleImmutableParents` | `1`                    | Number of immutable parent commits to show in the log when eliding commits                                                                                                            |
+| `juju.enableAnnotations`             | `true`                 | Enables in-line blame annotations                                                                                                                                                     |
+| `juju.fileClickAction`               | `"diff"`               | Action when clicking a file: `"diff"` (compare to parent), `"at-revision"` (open at clicked revision), or `"working-copy"` (open in working copy)                                     |
+| `juju.graphStyle`                    | `"compact"`            | Display style for commits: `"full"` shows all details, `"compact"` shows single line                                                                                                  |
+| `juju.jjPath`                        | `""`                   | Path to the jj executable. If not set, your PATH and common locations will be searched                                                                                                |
+| `juju.logLimit`                      | `500`                  | Maximum number of commits shown in the graph view                                                                                                                                     |
+| `juju.pollIntervalSeconds`           | `30`                   | Interval in seconds between repository polls. Set to 0 to disable                                                                                                                     |
+| `juju.showChangedFiles`              | `true`                 | ⚠️ Experimental: Show an expandable list of changed files for each commit in the graph (similar to `jj log -s`). Clicking a file opens a diff at that revision                        |
+| `juju.showTooltips`                  | `true`                 | Show tooltips when hovering over commits in the graph view                                                                                                                            |
 
 ## 🐛 Known issues
 

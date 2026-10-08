@@ -833,14 +833,21 @@
         },
         "juju.changeDoubleClickAction": {
           "type": "string",
-          "default": "new",
+          "default": "newEditUndescribed",
           "enum": [
             "edit",
-            "new"
+            "new",
+            "newEditUndescribed"
+          ],
+          "enumItemLabels": [
+            "edit",
+            "new",
+            "new, edit undescribed"
           ],
           "enumDescriptions": [
             "Edits the change (jj edit)",
-            "Creates an empty change on top and switches to it (jj new)"
+            "Creates an empty change on top and switches to it (jj new)",
+            "Edits a change without a description (jj edit), and creates an empty change on top of a described change and switches to it (jj new)"
           ],
           "description": "Action to perform when double-clicking a change in the graph view",
           "scope": "resource"

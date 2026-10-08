@@ -34,6 +34,7 @@ import { DEFAULT_LOG_LIMIT } from "./constants";
 import { SplitWebview } from "./split-webview";
 import { toJJUri } from "./uri";
 import { joinRepositoryPath, repositoryRelativePath, toWorkspaceUri } from "./workspace-paths";
+import { DEFAULT_CHANGE_DOUBLE_CLICK_ACTION, resolveDoubleClickAction } from "./double-click-action";
 
 const rootChangeId = "z".repeat(32);
 
@@ -137,15 +138,23 @@ export class JJGraphWebview implements vscode.WebviewViewProvider {
       switch (message.command) {
         case "editChange":
           try {
+            const change = this.findRegularChange(message.changeId);
+            if (!change) {
+              return;
+            }
             const config = vscode.workspace.getConfiguration("juju");
-            const changeDoubleClickAction = config.get<string>("changeDoubleClickAction") || "edit";
-            if (changeDoubleClickAction === "new") {
+            const changeDoubleClickAction =
+              config.get<string>("changeDoubleClickAction") || DEFAULT_CHANGE_DOUBLE_CLICK_ACTION;
+            const action = resolveDoubleClickAction(
+              { ...change, changeId: change.id.changeId },
+              changeDoubleClickAction,
+            );
+            if (action === "new") {
               await repo.new(undefined, [message.changeId]);
-            } else {
-              if (message.changeId === rootChangeId) {
-                return;
-              }
+            } else if (action === "edit") {
               await repo.editRetryImmutable(message.changeId);
+            } else {
+              return;
             }
             this._onDidSwitchChange.fire();
           } catch (error: unknown) {
@@ -1086,7 +1095,8 @@ export class JJGraphWebview implements vscode.WebviewViewProvider {
 
       const previousSelectedNodes = this.selectedNodes;
       this.selectedNodes = new Set(Array.from(previousSelectedNodes).filter((id) => this.changesById.has(id)));
-      const changeDoubleClickAction = config.get<string>("changeDoubleClickAction") || "edit";
+      const changeDoubleClickAction =
+        config.get<string>("changeDoubleClickAction") || DEFAULT_CHANGE_DOUBLE_CLICK_ACTION;
 
       let currentWorkspace: string | undefined;
       const workspace = currentWorkspaceFromEntries(rawEntries);
