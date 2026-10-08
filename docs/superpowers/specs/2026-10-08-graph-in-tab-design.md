@@ -12,10 +12,10 @@ The graph is a `WebviewView` (`jjGraphWebview`) contributed to the `scm` view co
 groups, not views, so the graph has to also be available as a `WebviewPanel` (editor tab).
 
 `JJGraphWebview` ([src/graph-webview.ts](../../../src/graph-webview.ts)) already keeps all graph state in the extension
-host: `lastSnapshot`, `selectedNodes`, `repository`, `currentChanges`. The webview renders and reports user actions.
-The single obstacle is `panel?: vscode.WebviewView`: one surface only, used by `postMessageToWebview`, `refresh`,
-`render`, `graphQueryFor` and the repository title update. The Details and Split views already use
-`createWebviewPanel`, so panels are an established pattern here.
+host: `lastSnapshot`, `selectedNodes`, `repository`, `currentChanges`. The webview renders and reports user actions. The
+single obstacle is `panel?: vscode.WebviewView`: one surface only, used by `postMessageToWebview`, `refresh`, `render`,
+`graphQueryFor` and the repository title update. The Details and Split views already use `createWebviewPanel`, so panels
+are an established pattern here.
 
 ## Decisions
 
@@ -47,8 +47,8 @@ private readonly surfaces = new Set<GraphSurface>();
 - `postMessageToWebview(message)` broadcasts to every surface and resolves to `true` if any delivery succeeded.
 - A surface-targeted variant `postMessageToSurface(surface, message)` is used for replay and `setSelection`.
 - Guards `if (!this.panel)` in `refresh`, `render`, `graphQueryFor` become `this.surfaces.size === 0`.
-- Titles: a single `updateTitles()` sets `JJ Graph (<repo basename>)` on every surface, called from
-  `resolveWebviewView` and `setSelectedRepository`.
+- Titles: a single `updateTitles()` sets `JJ Graph (<repo basename>)` on every surface, called from `resolveWebviewView`
+  and `setSelectedRepository`.
 - Request/response messages (`fetchDiffStats`, `fetchChangedFiles`, remote-ref lookups, `*Done`) are broadcast. The
   webview handlers already ignore responses that do not match their pending state (`changedFilesResponse` checks for
   `"loading"`, menu responses compare name/remote), and cache writes are idempotent, so this is harmless and avoids
@@ -91,8 +91,9 @@ New command `jj.openGraphInTab`, title "Open Graph in Tab", category "Jujutsu", 
 
 - Contributed to `view/title` for `jjGraphWebview` at `navigation@9` (after the repo switcher) and available in the
   Command Palette (`when: jj.reposExist`).
-- Handler: if the tab exists, `reveal()`; else `createWebviewPanel("jjGraphTab", title, ViewColumn.Active,
-{ enableScripts: true, retainContextWhenHidden: true, localResourceRoots: [extensionUri] })` and `attachSurface`.
+- Handler: if the tab exists, `reveal()`; else
+  `createWebviewPanel("jjGraphTab", title, ViewColumn.Active, { enableScripts: true, retainContextWhenHidden: true, localResourceRoots: [extensionUri] })`
+  and `attachSurface`.
 - `registerWebviewPanelSerializer("jjGraphTab", { deserializeWebviewPanel })` attaches a restored panel the same way
   (the HTML is re-set; state is replayed from the host).
 - When the extension is deactivated or the panel is closed, the surface is removed and the sidebar is unaffected.
@@ -100,8 +101,8 @@ New command `jj.openGraphInTab`, title "Open Graph in Tab", category "Jujutsu", 
 ### 5. Tab toolbar
 
 The sidebar's `view/title` entries (package.json, `view == jjGraphWebview ...`) do not render for an editor tab. Add
-matching `editor/title` entries with `when: activeWebviewPanelId == 'jjGraphTab' && <same condition>` for:
-Details, Fetch (idle/syncing), Fetch submenu (idle/syncing), Undo, Redo, Refresh, New, Elide toggle (show/elide), Select
+matching `editor/title` entries with `when: activeWebviewPanelId == 'jjGraphTab' && <same condition>` for: Details,
+Fetch (idle/syncing), Fetch submenu (idle/syncing), Undo, Redo, Refresh, New, Elide toggle (show/elide), Select
 Repository. The fetch submenu (`jj.graphFetchSubmenu`) items get a `when` that also accepts the tab, i.e.
 `view == jjGraphWebview || activeWebviewPanelId == 'jjGraphTab'`. The same commands and context keys are reused; no new
 command logic.
@@ -118,14 +119,14 @@ Group/order values mirror the sidebar (`navigation@N`) so the two toolbars look 
 
 - `postMessage` to a disposed surface is guarded: surfaces are removed on dispose and `postMessage` rejections are
   swallowed per surface so one dead surface cannot block delivery to the other.
-- If `createWebviewPanel` or the handshake fails, the error goes through `showErrorMessage("Failed to open graph tab",
-error)`; the sidebar is unaffected.
+- If `createWebviewPanel` or the handshake fails, the error goes through
+  `showErrorMessage("Failed to open graph tab", error)`; the sidebar is unaffected.
 
 ## Testing
 
-- Integration (Playwright, `tests-integration/tests`): open the tab with `jj.openGraphInTab`; select a change in the
-  tab and assert it is highlighted in the sidebar view, and the reverse; refresh after a repo change updates both;
-  closing the tab leaves the sidebar graph working.
+- Integration (Playwright, `tests-integration/tests`): open the tab with `jj.openGraphInTab`; select a change in the tab
+  and assert it is highlighted in the sidebar view, and the reverse; refresh after a repo change updates both; closing
+  the tab leaves the sidebar graph working.
 - Unit: none needed for wiring. If `setSelection` filtering is extracted into a pure helper (ids present in
   `currentChanges`), it gets a small unit test in `src/unit-test`.
 - `pnpm run format` and `pnpm run check` after the change.
