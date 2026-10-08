@@ -115,6 +115,11 @@ export function useDragDrop(change: ChangeNode) {
       dropTargetId.value = change.id.changeId;
     },
     onDragLeave: (e: DragEvent) => {
+      // Browsers fire dragenter on the new row before dragleave on the old
+      // one, so only clear the highlight if it still belongs to this row.
+      if (dropTargetId.value !== change.id.changeId) {
+        return;
+      }
       const relatedTarget = e.relatedTarget as HTMLElement | null;
       const currentTarget = e.currentTarget as HTMLElement;
       if (relatedTarget && currentTarget.contains(relatedTarget)) {
