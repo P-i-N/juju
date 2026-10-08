@@ -107,6 +107,7 @@ export type WebviewToExtensionMessage =
   | { command: "editChange"; changeId: FullChangeId }
   | { command: "editChangeDirect"; changeId: FullChangeId }
   | { command: "newChildChange"; changeIds: FullChangeId[] }
+  | { command: "insertNewChange"; changeId: FullChangeId; position: "after" | "before" }
   | { command: "selectChange"; selectedNodes: FullChangeId[] }
   | { command: "openDetailsView" }
   | { command: "showChangeDetails"; changeId: FullChangeId }

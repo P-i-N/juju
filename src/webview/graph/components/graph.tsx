@@ -13,12 +13,14 @@ import { ChangeNodeRow } from "./change-node";
 import { NodeCircles } from "./node-circle";
 import { ConnectionLines } from "./connection-lines";
 import { useKeyboardShortcuts } from "../hooks/use-keyboard-shortcuts";
+import { useInsertModifier } from "../hooks/use-insert-modifier";
 import { getUniqueId } from "../../../graph-protocol";
 
 export function Graph() {
   const firstChangeIdRef = useRef<HTMLDivElement>(null);
 
   useKeyboardShortcuts();
+  useInsertModifier();
 
   useSignalEffect(() => {
     const changes = currentChanges.value;

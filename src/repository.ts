@@ -724,6 +724,25 @@ export class JJRepository {
     );
   }
 
+  private async newInsert(rev: FullChangeId, position: "after" | "before", ignoreImmutable = false) {
+    return this.jjCommand([
+      "new",
+      position === "after" ? "-A" : "-B",
+      rev,
+      ...(ignoreImmutable ? ["--ignore-immutable"] : []),
+    ]);
+  }
+
+  async newInsertRetryImmutable(rev: FullChangeId, position: "after" | "before") {
+    return this.retryWithImmutable(
+      rev,
+      () => this.newInsert(rev, position),
+      () => this.newInsert(rev, position, true),
+      "Inserting this change modifies one or more immutable commits, are you sure?",
+      "Modify Immutable Change",
+    );
+  }
+
   async commit(message?: string, editor?: boolean) {
     return this.withEditorRecovery((sessionId) =>
       this.jjCommand(["commit", ...(message !== undefined ? ["-m", message] : []), ...(editor ? ["--editor"] : [])], {

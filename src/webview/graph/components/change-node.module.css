@@ -17,6 +17,36 @@
   color: var(--vscode-list-activeSelectionForeground);
 }
 
+.changeNode.edgeTop {
+  box-shadow: inset 0 2px 0 var(--vscode-focusBorder);
+}
+
+.changeNode.edgeBottom {
+  box-shadow: inset 0 -2px 0 var(--vscode-focusBorder);
+}
+
+/* Overrides the cursors of the row's children (pills, change id) too. */
+.changeNode.edgeCursorTop,
+.changeNode.edgeCursorTop * {
+  cursor:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24'%3E%3Cpath d='M12 3 19 11h-4.5v10h-5V11H5z' fill='black' stroke='white' stroke-width='1.5' stroke-linejoin='round'/%3E%3C/svg%3E")
+      12 12,
+    n-resize !important;
+}
+
+.changeNode.edgeCursorBottom,
+.changeNode.edgeCursorBottom * {
+  cursor:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24'%3E%3Cpath d='M12 21 19 13h-4.5V3h-5v10H5z' fill='black' stroke='white' stroke-width='1.5' stroke-linejoin='round'/%3E%3C/svg%3E")
+      12 12,
+    s-resize !important;
+}
+
+.changeNode.edgeCursorShared,
+.changeNode.edgeCursorShared * {
+  cursor: ns-resize !important;
+}
+
 .changeNode.dropTarget {
   outline: 2px solid var(--vscode-focusBorder);
   outline-offset: 2px;

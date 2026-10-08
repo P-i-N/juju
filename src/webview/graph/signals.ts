@@ -1,5 +1,6 @@
 import { computed, signal } from "@preact/signals";
 import type { VSCodeAPI } from "./types";
+import { computeEdgeHighlight, type HoveredEdge } from "./insert-edges";
 import type {
   ChangeNode,
   ChangeIdGraph,
@@ -45,6 +46,15 @@ export const bookmarkDropPreviewTargetId = computed(() => {
   return targetId;
 });
 export const hoveredChangeId = signal<string | null>(null);
+export const insertModifierHeld = signal(false);
+export const hoveredEdge = signal<HoveredEdge | null>(null);
+export const edgeHighlight = computed(() => {
+  const edge = hoveredEdge.value;
+  if (!edge || !insertModifierHeld.value || isDragging.value) {
+    return null;
+  }
+  return computeEdgeHighlight(currentChanges.value, edge);
+});
 export const justFinishedDrag = signal(false);
 export const maxPrefixLength = signal(4);
 export const changeIdHorizontalOffset = signal(0);

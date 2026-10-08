@@ -51,8 +51,12 @@ import {
   currentChanges,
   connectedHighlight,
   selectionAnchorId,
+  insertModifierHeld,
+  hoveredEdge,
+  edgeHighlight,
 } from "../signals";
 import { computeSelection } from "../selection";
+import { canInsertAt, edgeCursorFor, edgeSideAt, type EdgeCursor, type EdgeSide } from "../insert-edges";
 import { SWIMLANE_WIDTH, CHANGE_ID_RIGHT_PADDING, rootChangeId } from "../types";
 import {
   getUniqueId,
@@ -83,6 +87,12 @@ interface Props {
   compact: boolean;
 }
 
+function insertSideAt(change: ChangeNode, e: MouseEvent): EdgeSide | null {
+  const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+  const side = edgeSideAt(e.clientY - rect.top, rect.height);
+  return side !== null && canInsertAt(change, side) ? side : null;
+}
+
 function canHaveChangedFiles(change: RegularChangeNode): boolean {
   return !change.elided && (!change.isEmpty || change.conflict);
 }
@@ -98,10 +108,37 @@ export function ChangeNodeRow({ change, index, nodeData, changeIdRef, compact }:
   );
   const filesState =
     filesExpanded.value && change.branchType !== "~" ? changedFilesCache.value.get(change.commitId) : undefined;
+  const edgeTop = useComputed(
+    () => change.branchType !== "~" && (edgeHighlight.value?.top.has(change.id.changeId) ?? false),
+  );
+  const edgeBottom = useComputed(
+    () => change.branchType !== "~" && (edgeHighlight.value?.bottom.has(change.id.changeId) ?? false),
+  );
+  const edgeCursor = useComputed(() =>
+    change.branchType === "~" ? null : edgeCursorFor(edgeHighlight.value, hoveredEdge.value, change.id.changeId),
+  );
   const graphW = SWIMLANE_WIDTH * (nodeData?.numLanesActiveVisually ?? 0);
+
+  const updateHoveredEdge = (e: MouseEvent) => {
+    insertModifierHeld.value = e.ctrlKey || e.metaKey;
+    const side = insertSideAt(change, e);
+    const current = hoveredEdge.value;
+    if (side === null || change.branchType === "~") {
+      if (current !== null) {
+        hoveredEdge.value = null;
+      }
+      return;
+    }
+    if (current?.changeId !== change.id.changeId || current.side !== side) {
+      hoveredEdge.value = { changeId: change.id.changeId, side };
+    }
+  };
 
   const handleClick = (e: MouseEvent) => {
     if (isDragging.value || justFinishedDrag.value) {
+      return;
+    }
+    if ((e.ctrlKey || e.metaKey) && insertSideAt(change, e) !== null) {
       return;
     }
     if (isElided && !e.shiftKey) {
@@ -125,8 +162,17 @@ export function ChangeNodeRow({ change, index, nodeData, changeIdRef, compact }:
     });
   };
 
-  const handleDoubleClick = () => {
-    if (isElided) {
+  const handleDoubleClick = (e: MouseEvent) => {
+    if (change.branchType === "~") {
+      return;
+    }
+    const side = (e.ctrlKey || e.metaKey) && insertSideAt(change, e);
+    if (side) {
+      postMessage({
+        command: "insertNewChange",
+        changeId: change.id.changeId,
+        position: side === "top" ? "after" : "before",
+      });
       return;
     }
     editChange(change);
@@ -148,7 +194,7 @@ export function ChangeNodeRow({ change, index, nodeData, changeIdRef, compact }:
 
   const tryStartTooltip = (e: MouseEvent) => {
     clearHideTimer();
-    if (isDragging.value || isAnyMenuOpen() || !showTooltips.value) {
+    if (isDragging.value || isAnyMenuOpen() || !showTooltips.value || edgeHighlight.value) {
       return;
     }
     if (shouldShowTooltip(change) && isOverTooltipTarget(e)) {
@@ -171,15 +217,18 @@ export function ChangeNodeRow({ change, index, nodeData, changeIdRef, compact }:
       };
     }
     hoveredChangeId.value = getUniqueId(change);
+    updateHoveredEdge(e);
     tryStartTooltip(e);
   };
 
   const handleMouseMove = (e: MouseEvent) => {
+    updateHoveredEdge(e);
     clearHoverTimers();
     tryStartTooltip(e);
   };
 
   const handleMouseLeave = () => {
+    hoveredEdge.value = null;
     connectedHighlight.value = null;
     hoveredChangeId.value = null;
     clearHoverTimers();
@@ -198,6 +247,9 @@ export function ChangeNodeRow({ change, index, nodeData, changeIdRef, compact }:
         currentWorkingCopy={change.branchType !== "~" && change.currentWorkingCopy}
         isElided={isElided}
         selected={isSelected}
+        edgeTop={edgeTop}
+        edgeBottom={edgeBottom}
+        edgeCursor={edgeCursor}
         modeClasses={modeClasses}
         data-change-id={changeUniqueId}
         onClick={handleClick}
@@ -249,6 +301,9 @@ function ChangeNodeClass({
   currentWorkingCopy,
   isElided,
   selected,
+  edgeTop,
+  edgeBottom,
+  edgeCursor,
   modeClasses,
   children,
   ...rest
@@ -257,6 +312,9 @@ function ChangeNodeClass({
   currentWorkingCopy: boolean;
   isElided: boolean;
   selected: ReadonlySignal<boolean>;
+  edgeTop: ReadonlySignal<boolean>;
+  edgeBottom: ReadonlySignal<boolean>;
+  edgeCursor: ReadonlySignal<EdgeCursor | null>;
   modeClasses: string;
   children?: preact.ComponentChildren;
 } & HTMLAttributes<HTMLDivElement>) {
@@ -268,9 +326,17 @@ function ChangeNodeClass({
         isElided && styles.elidedNode,
         selected.value && styles.selected,
         dropTargetId.value === changeId && styles.dropTarget,
+        edgeTop.value && styles.edgeTop,
+        edgeBottom.value && styles.edgeBottom,
+        edgeCursor.value === "top" && styles.edgeCursorTop,
+        edgeCursor.value === "bottom" && styles.edgeCursorBottom,
+        edgeCursor.value === "shared" && styles.edgeCursorShared,
         modeClasses,
       )}
       data-selected={selected.value ? "" : undefined}
+      data-edge-top={edgeTop.value ? "" : undefined}
+      data-edge-bottom={edgeBottom.value ? "" : undefined}
+      data-edge-cursor={edgeCursor.value ?? undefined}
       {...rest}
     >
       {children}
