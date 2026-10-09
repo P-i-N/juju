@@ -1,5 +1,33 @@
 # Change Log
 
+## 0.1.0
+
+First release of Juju, a fork of [Jujutsu X](https://github.com/Christoph-D/jjx).
+
+### New Features
+
+- **Expandable commits** - Changes in the graph expand to show the files they touch, grouped by directory, with the same
+  file actions as the Source Control view, including discarding changes of selected files
+- **Dragging changed files** - Drag changed files onto another change to move their changes there, or `Ctrl`+drop them
+  onto an edge to move them into a new change at that place
+- **Inserting changes in between** - `Ctrl`+drag a change onto an edge to rebase it exactly there, or
+  `Ctrl`+double-click an edge to insert a new empty change
+- **Graph in an editor tab** - Open the graph in a regular editor tab that stays in sync with the graph in the side bar
+- **New double-click action** - Double-clicking a change runs `jj edit` on changes without a description and `jj new`
+  otherwise
+- **Bookmark drag preview** - Dragged bookmarks are highlighted and previewed on the drop target
+
+### Changes
+
+- Settings use the `juju.` prefix
+- Commands, views, context keys, colors, and the virtual file system scheme (`juju://`) use Juju-specific IDs, so Juju
+  can be installed alongside Jujutsu X
+- The graph, Source Control view, and operation log are refreshed from a single repository snapshot
+
+## Jujutsu X History
+
+The entries below are the change log of Jujutsu X up to the point where Juju was forked.
+
 ## 1.16.2
 
 ### New Features
