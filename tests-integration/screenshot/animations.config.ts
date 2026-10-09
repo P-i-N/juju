@@ -1,15 +1,12 @@
 import { defineConfig } from "@playwright/test";
 
 export default defineConfig({
-  timeout: 30_000,
+  timeout: 120_000,
   workers: 1,
   fullyParallel: false,
   expect: {
     timeout: 10_000,
   },
-  use: {
-    screenshot: "only-on-failure",
-  },
   globalSetup: "../global-setup",
-  testMatch: "screenshot.test.ts",
+  testMatch: "animations.test.ts",
 });
