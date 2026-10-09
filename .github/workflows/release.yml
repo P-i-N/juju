@@ -44,7 +44,7 @@ jobs:
         id: version
         run: |
           VERSION=$(jq -r .version package.json)
-          VSIX_NAME="jjx-${VERSION}.vsix"
+          VSIX_NAME="juju-${VERSION}.vsix"
           echo "vsix_name=${VSIX_NAME}" >> $GITHUB_OUTPUT
 
       - name: Extract release notes
