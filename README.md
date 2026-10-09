@@ -2,221 +2,105 @@
 
 ![logo](images/logo-small.png)
 
-**Juju** provides a native VS Code experience for the [Jujutsu (jj)](https://github.com/jj-vcs/jj) version control
-system.
+> **Juju is a heavily modified fork of [Jujutsu X (jjx)](https://github.com/Christoph-D/jjx)** by Christoph Dittmann.
+> Jujutsu X is a VS Code extension for the [Jujutsu (jj)](https://github.com/jj-vcs/jj) version control system with an
+> interactive commit graph, drag & drop rebasing and squashing, an operation log, conflict resolution in the VS Code
+> merge editor, and much more. If you are looking for the original, well-maintained extension, use Jujutsu X. Juju
+> builds on top of it and experiments with a more direct, hands-on way of editing history right in the graph.
 
-## 🚀 Key features
+## ✨ What Juju Adds
 
-- Interactive commit graph with elided commits like the `jj` CLI
-- Clean short change IDs
-- Efficient: Defaults to showing up to 500 commits, can be configured to show more
-- Drag-and-drop for rebase, squash, move bookmarks/tags, and more
-- Context menus for change/bookmark/tag operations
-- Commit details view
-- Flexible configuration supports squash and edit workflows and more
-- Conflict resolution via the native VS Code merge editor
-- Bookmark and tag management with remote sync
-- Multi-workspace support with automatic stale workspace updates
-- Operation log with undo/redo
-- Compare two changes with a diff or interdiff
-- Interactively split a change into two changes (`jj split`)
-- Handles divergent commits, conflicted bookmarks, and more
+### 📂 Expandable Commits
 
-## 📖 Full Feature List
+Every change in the graph can be expanded to show the files it touches, grouped by directory, like `jj log -s`. Click
+the arrow next to a change (or press `ArrowRight` / `ArrowLeft` on the selected change) to expand or collapse it. Files
+are selectable rows: click, `Ctrl`+click, and `Shift`+click select them, double-click opens the diff, and the context
+menu offers the same actions as the Source Control view, including discarding the changes of the selected files.
 
-### 🔗 Graph view
+![Expanding commits in the graph to show their changed files](images/expandable-commits.gif)
 
-- Compact graph view  
-  ![compact graph dark theme](images/compact-view.png) ![compact graph light theme](images/compact-view-light.png)
-  - Alternative: [Extended graph view](images/full-view.png)
-- High information density
-- Author name omitted if it's your own change
-- Elided commits
-- Select a change to see its affected files and diffs
-- Select multiple changes with shift-click (contiguous range from the last clicked change) or ctrl-click (individual
-  changes, cmd-click on macOS)
-- Compare two selected changes with a diff or interdiff
-- Create merge changes by selecting multiple changes and then pressing the "+" button
-- Drag & drop changes onto other changes
-- Show each commit's changed files in the graph (like `jj log -s`) behind an expand arrow next to the commit. Click a
-  file to open its diff, or drag it onto another change to move its changes there (⚠️ experimental, disable with
-  `juju.showChangedFiles`)
-- Keyboard shortcuts:
-  - `ArrowUp` / `ArrowDown`: Move the selection by one change
-  - `Shift` + `ArrowUp` / `ArrowDown`: Extend the selection by one change, like a `Shift` + click
-  - `Enter`: Open the selected change like a double click; with multiple selected changes, create a new change with all
-    of them as parents
-  - `Delete`: Abandon the selected change(s), with confirmation
-  - `n`: Create a new change on top of the selected change(s), with all of them as parents
-  - `i`: Open the details view for the current selection
-  - `d`: Describe the last selected change
-  - `e`: Edit the last selected change
-  - `b`: Create a bookmark on the last selected change
-  - `t`: Create a tag on the last selected change
-  - `s`: Split the last selected change
-  - `ArrowRight` / `ArrowLeft`: Expand/collapse the changed files of the selected change(s) (with
-    `juju.showChangedFiles`)
+### 🖱️ Dragging Changed Files
 
-### 🖱️ Context menu
+Drag a changed file, or several selected files, onto another change to move their changes there. Hold `Ctrl` (`Cmd` on
+macOS) while dropping a file onto the edge between two changes to move it into a brand-new change at that place, without
+leaving your current working copy.
 
-- Right click on a change for a context menu  
-  ![context menu](images/context-menu.png)
-- Edit the change, new child change
-- Describe the change
-- Manage bookmarks/tags
-- Copy the commit's web URL, for example the Github URL
-- Copy the full change ID
-- Absorb the change into its parents
-- Split the change into two changes
-- Abandon one or more changes (select multiple with shift-click or ctrl-click)
+![Dragging changed files between changes](images/dragging-changed-files.gif)
 
-### ✋ Drag & drop operations
+### ➕ Inserting Changes in Between
 
-- Move bookmarks by dragging them onto a target change
-- Rebase one or more changes (with or without descendants) onto/after/before any other change  
-  ![rebase menu](images/rebase-menu.png)
-- Squash one or more changes into any other change
-- Duplicate one or more changes onto/after/before any other change
-- Apply the reverse of one or more changes (revert) onto/after/before any other change
-- Add or remove parents of a change
+Hold `Ctrl` (`Cmd` on macOS) and the edges between changes light up as you hover them:
 
-### 📁 File management
+- **`Ctrl`+drag** a change onto an edge to rebase it exactly there: in between two changes, onto a change (top edge) or
+  before a change (bottom edge)
+- **`Ctrl`+double-click** an edge to insert a new empty change there (`jj new -A` / `jj new -B`) and start working in it
 
-- Show changed files in the working copy, parent changes, or a selected change
-- Compare two selected changes with a diff or interdiff
-- Show, track, or delete untracked files (files jj does not ignore but does not track)
-- Right-click context menu: View as diff, open at revision, open in working copy, copy paths
-- Configurable file click action: View as diff, open at revision, open in working copy
-- Line-by-line blame annotations (optional)
+![Moving a change between two others and inserting a new change](images/inserting-changes.gif)
 
-### 💫 Change management
+### 🗂️ Graph in an Editor Tab
 
-- Quickly commit with Ctrl+Enter, no commit message required
-- Ctrl+Shift+Enter opens the commit message in the full VS Code editor
-- Flexible configuration supports both the
-  [squash workflow](https://steveklabnik.github.io/jujutsu-tutorial/real-world-workflows/the-squash-workflow.html), the
-  [edit workflow](https://steveklabnik.github.io/jujutsu-tutorial/real-world-workflows/the-edit-workflow.html), and more
-- Move changes between working copy and parents
-- Move specific lines from the working copy to its parent changes
-- Discard changes
+Open the graph in a regular editor tab with the "Open Graph in Tab" button in the JJ Graph toolbar (or the
+`Jujutsu: Open Graph in Tab` command) to give it all the room it needs. The tab has the full graph toolbar, and its
+selection stays in sync with the graph in the side bar.
 
-### ✂️ Interactive split
+![Opening the graph in an editor tab](images/graph-in-tab.gif)
 
-- Split any change into two changes from the graph context menu, with an interactive selection  
-  ![split view](images/split-view.png)
-- Supports renames, file mode changes, and more
+### 🔧 Smaller Improvements
 
-### 🔍 Details view
+- Double-clicking a change runs `jj edit` on changes without a description and `jj new` otherwise (configurable with
+  `juju.changeDoubleClickAction`)
+- Dragged bookmarks are highlighted and previewed on the drop target
+- The graph, Source Control view, and operation log are refreshed from a single repository snapshot, which keeps them
+  consistent and fast
 
-- Show the details of the selected change similar to `jj show`, opened via the info button in the graph view toolbar  
-  ![details view](images/details-view.png)
+## 📦 Everything Else
 
-### ⚠️ Conflicts
+All the other features of Jujutsu X are still here: the compact commit graph with elided commits, drag & drop rebase,
+squash, duplicate, and revert, context menus for changes, bookmarks, and tags, the details view, interactive split,
+conflict resolution, divergent change handling, multi-workspace support, and the operation log with undo/redo. See the
+[Jujutsu X README](https://github.com/Christoph-D/jjx#readme) for a full tour.
 
-- Show conflicts in the graph and change view  
-  ![conflicts](images/conflicts.png)
-- Resolve conflicts with the VS Code merge editor  
-  ![merge editor](images/merge-editor.png)
+## 📋 Requirements
 
-### 🔀 Divergent changes
+- [`jj`](https://github.com/jj-vcs/jj) 0.38.0 or newer, either on your `$PATH` or configured with `juju.jjPath`
+- VS Code 1.125.0 or newer
 
-- Show divergent changes in the graph and change view  
-  ![divergent commits](images/divergent-commits.png)
+## ⚙️ Settings
 
-### 🙈 Hidden changes
+All settings live under the `juju.` prefix. The most useful ones:
 
-- Properly render hidden changes in the graph, for example when a change with a remote bookmark is rewritten locally
+| Setting                         | Default                | Description                                                                       |
+| ------------------------------- | ---------------------- | --------------------------------------------------------------------------------- |
+| `juju.showChangedFiles`         | `true`                 | Make changes in the graph expandable to show their changed files                  |
+| `juju.changeDoubleClickAction`  | `"newEditUndescribed"` | What double-clicking a change does: `"edit"`, `"new"`, or `"newEditUndescribed"`  |
+| `juju.graphStyle`               | `"compact"`            | `"compact"` shows one line per change, `"full"` shows all details                 |
+| `juju.logLimit`                 | `500`                  | Maximum number of changes shown in the graph                                      |
+| `juju.jjPath`                   | `""`                   | Path to the `jj` executable; searched on `$PATH` and common locations if empty    |
+| `juju.enableAnnotations`        | `true`                 | Show inline blame annotations with the change that last touched each line         |
+| `juju.autoUpdateStaleWorkspace` | `true`                 | Run `jj workspace update-stale` automatically when the working copy becomes stale |
+| `juju.pollIntervalSeconds`      | `30`                   | Seconds between repository polls, `0` disables polling                            |
 
-### 🏷️ Bookmark/Tag management
+Disable VS Code's built-in Git extension (`git.enabled`) in jj repositories to avoid duplicate file decorations.
 
-- Create, move, and delete bookmarks
-- Move bookmarks via drag&drop
-- Upload a bookmark to all its tracking remotes with a single click ![unsynced bookmark](images/unsynced-bookmark.png)
-- Right-click context menu to push a bookmark to a specific remote
-- Right-click context menu to push a tag to a specific remote (using proper tag tracking with jj 0.44+)
-- Track/untrack bookmarks on specific remotes
-- Delete a bookmark/tag  
-  ![bookmark context menu](images/bookmark-context-menu.png)
-- Delete locally deleted bookmarks/tags from a remote
-- Set and delete tags
-- Show conflicted bookmarks and tags with `??` suffix
+## 🛠️ Development
 
-### 💼 Multi-Workspace support
+```shell
+pnpm install
+pnpm run build       # build the extension
+pnpm run check       # type check, lint, format check, unit tests
+pnpm run test        # unit and integration tests
+```
 
-- Show workspace labels in the graph view  
-  ![workspaces](images/workspaces.png)
-- Right-click a workspace pill to forget the workspace (with or without deleting its directory) or copy its path
-- Automatically update stale workspaces (can be disabled with `juju.autoUpdateStaleWorkspace`, in which case the user
-  will be prompted to update a stale workspace)
+The animations in this README are recorded from a real VS Code instance by `pnpm run update-animations` (requires `Xvfb`
+and `ffmpeg`).
 
-### 🔄 Operation management
+## 🐛 Issues
 
-- Browse the operations log with quick undo/redo buttons  
-  ![oplog](images/oplog.png)
-- Undo any jj operation or restore repository to a previous state
-
-## 📋 Prerequisites
-
-- Ensure `jj` is installed and available in your system's `$PATH`, or configure a custom path using the `juju.jjPath`
-  setting
-- Ensure `jj` is of a recent version (>=0.38.0)
-
-## ⚙️ Configuration
-
-The following settings can be configured in VS Code's settings:
-
-| Setting                              | Default                | Description                                                                                                                                                                           |
-| ------------------------------------ | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `juju.autoSwitchRepository`          | `true`                 | Automatically switch the repository shown in the JJ Graph and Operation Log views to the repository containing the active editor                                                      |
-| `juju.autoUpdateStaleWorkspace`      | `true`                 | Automatically run `jj workspace update-stale` when the current workspace is stale                                                                                                     |
-| `juju.baseWebURL`                    | `""`                   | Base URL for the 'Copy URL' feature (e.g., `https://github.com/user/repo`). Overrides `git_web_url()` when set                                                                        |
-| `juju.changeDoubleClickAction`       | `"newEditUndescribed"` | Action when double-clicking a change in the graph view: `"edit"` (jj edit), `"new"` (jj new), or `"newEditUndescribed"` (jj edit for changes without a description, jj new otherwise) |
-| `juju.commandTimeout`                | `null`                 | Global timeout in milliseconds for all jj commands. If not set, per-command defaults will be used                                                                                     |
-| `juju.commitAction`                  | `"commit"`             | Action when pressing Ctrl+Enter in source control: `"commit"` (jj commit) or `"new"` (jj new). Ctrl+Shift+Enter does the same but also opens an editor                                |
-| `juju.elideImmutableCommits`         | `true`                 | Hide chains of immutable commits between relevant commits in the graph view                                                                                                           |
-| `juju.elidedVisibleImmutableParents` | `1`                    | Number of immutable parent commits to show in the log when eliding commits                                                                                                            |
-| `juju.enableAnnotations`             | `true`                 | Enables in-line blame annotations                                                                                                                                                     |
-| `juju.fileClickAction`               | `"diff"`               | Action when clicking a file: `"diff"` (compare to parent), `"at-revision"` (open at clicked revision), or `"working-copy"` (open in working copy)                                     |
-| `juju.graphStyle`                    | `"compact"`            | Display style for commits: `"full"` shows all details, `"compact"` shows single line                                                                                                  |
-| `juju.jjPath`                        | `""`                   | Path to the jj executable. If not set, your PATH and common locations will be searched                                                                                                |
-| `juju.logLimit`                      | `500`                  | Maximum number of commits shown in the graph view                                                                                                                                     |
-| `juju.pollIntervalSeconds`           | `30`                   | Interval in seconds between repository polls. Set to 0 to disable                                                                                                                     |
-| `juju.showChangedFiles`              | `true`                 | ⚠️ Experimental: Show an expandable list of changed files for each commit in the graph (similar to `jj log -s`). Clicking a file opens a diff at that revision                        |
-| `juju.showTooltips`                  | `true`                 | Show tooltips when hovering over commits in the graph view                                                                                                                            |
-
-## 🐛 Known issues
-
-If you encounter any problems, please [report them on GitHub](https://github.com/P-i-N/juju/issues/)!
-
-## 🔧 Troubleshooting
-
-### Double modification annotations ("M, M") in file explorer
-
-If you see annotations like "M, M" next to files, this is caused by VS Code's built-in Git extension running alongside
-Juju. To disable Git, disable `git.enabled` in your VS Code settings.
-
-### Slow diff
-
-Some file diffs or merges load very slowly. This is a known VS Code issue where VS Code's internal diff algorithm takes
-an unusually long time for certain diffs.
-
-You can verify that it's VS Code and not Juju by opening the same diff with `code --diff <file-a> <file-b>`.
-
-Workarounds:
-
-- Wait a few seconds; VS Code automatically stops the diff early after 5 seconds
-- Set `diffEditor.diffAlgorithm` and `mergeEditor.diffAlgorithm` to "legacy"
-
-### Other performance issues
-
-If you experience performance issues, try these steps:
-
-- Disable `juju.enableAnnotations`, blame annotations are expensive to compute for large repos
-- Lower `juju.logLimit` to show fewer commits in the graph
+Please report problems with Juju on [GitHub](https://github.com/P-i-N/juju/issues/), not to the Jujutsu X project.
 
 ## 🙏 Acknowledgements
 
-Juju is a fork of [Jujutsu X](https://github.com/Christoph-D/jjx), which is based on
+Juju is a fork of [Jujutsu X](https://github.com/Christoph-D/jjx) by Christoph Dittmann, which in turn is based on
 [Jujutsu Kaizen](https://github.com/keanemind/jjk).
 
 ## 📝 License
