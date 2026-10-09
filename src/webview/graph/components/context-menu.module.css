@@ -3,8 +3,8 @@
   position: absolute;
   background-color: var(--vscode-menu-background);
   border: 1px solid var(--vscode-menu-border);
-  border-radius: 4px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  border-radius: 5px;
+  box-shadow: 0 0 8px 2px var(--vscode-widget-shadow, rgba(0, 0, 0, 0.36));
   padding: 4px 0;
   user-select: none;
 }
@@ -17,14 +17,19 @@
   left: -9999px;
   top: -9999px;
   z-index: 1000;
-  min-width: 120px;
+  min-width: 160px;
 }
 
 .contextMenuItem,
 .contextSubmenuItem {
-  padding: 6px 20px;
+  display: flex;
+  align-items: center;
+  height: 26px;
+  box-sizing: border-box;
+  padding: 0 26px;
   cursor: pointer;
-  font-size: var(--vscode-font-size);
+  font-size: var(--vscode-font-size, 13px);
+  line-height: 1;
   color: var(--vscode-menu-foreground);
 }
 
@@ -35,7 +40,7 @@
 }
 
 .contextMenuItem.disabled {
-  opacity: 0.5;
+  opacity: 0.4;
   cursor: default;
   pointer-events: none;
 }
@@ -45,16 +50,20 @@
 }
 
 .hasSubmenu::after {
-  content: "▶";
+  content: "";
   position: absolute;
-  right: 8px;
-  font-size: 0.7em;
+  right: 6px;
+  width: 16px;
+  height: 16px;
+  background-color: currentColor;
+  mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><path d='M5.7 13.7 5 13l4.6-4.6v-.7L5 3l.7-.7 5 5v1.4l-5 5z'/></svg>")
+    center / contain no-repeat;
 }
 
 .contextSubmenu {
   display: none;
   left: 100%;
-  top: 0;
+  top: -4px;
   min-width: 100px;
   z-index: 10;
 }
@@ -83,7 +92,7 @@
 
 .contextSubmenu.bottomAligned {
   top: auto;
-  bottom: 0;
+  bottom: -4px;
 }
 
 .contextSubmenuItem {
@@ -91,12 +100,12 @@
 }
 
 .hasSubmenu.disabled {
-  opacity: 0.5;
+  opacity: 0.4;
   pointer-events: none;
 }
 
 .contextMenuSeparator {
   height: 1px;
   background-color: var(--vscode-menu-separatorBackground);
-  margin: 4px 8px;
+  margin: 5px 0;
 }
