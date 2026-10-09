@@ -13,7 +13,7 @@ function syncSelectedRepoToActiveEditor(state: ExtensionState) {
     return;
   }
   const uri = vscode.window.activeTextEditor?.document.uri;
-  if (!uri || !["file", "jj"].includes(uri.scheme)) {
+  if (!uri || !["file", "juju"].includes(uri.scheme)) {
     return;
   }
   const repository = state.workspaceSCM.getRepositoryFromUri(uri);
@@ -132,7 +132,7 @@ export function initInfrastructure(state: ExtensionState) {
   syncSelectedRepoToActiveEditor(state);
   context.subscriptions.push(vscode.window.onDidChangeActiveTextEditor(() => syncSelectedRepoToActiveEditor(state)));
 
-  vscode.commands.executeCommand("setContext", "jj.reposExist", true);
+  vscode.commands.executeCommand("setContext", "juju.reposExist", true);
 }
 
 export function createPolling(

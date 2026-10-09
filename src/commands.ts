@@ -263,7 +263,7 @@ function runRemoteOperation(
   fromSubmenu: boolean,
   operation: (token: vscode.CancellationToken | undefined) => Promise<void>,
 ): Promise<void> {
-  return fromSubmenu ? withSyncingCancellation("jj.fetchPushSyncing", operation) : operation(undefined);
+  return fromSubmenu ? withSyncingCancellation("juju.fetchPushSyncing", operation) : operation(undefined);
 }
 
 async function fetchAllRemotesAction(state: ExtensionState, fromSubmenu: boolean): Promise<void> {
@@ -306,7 +306,7 @@ async function navigateToRelativeChange(uri: vscode.Uri | undefined, revExpressi
     return;
   }
 
-  if (!["file", "jj"].includes(uri.scheme)) {
+  if (!["file", "juju"].includes(uri.scheme)) {
     return;
   }
 
@@ -469,13 +469,13 @@ async function openFileDiff(repo: JJRepository, filePath: string, changeId: Full
 export function registerPreInitCommands(state: ExtensionState): void {
   const context = state.context;
 
-  registerCommandWithLoading(context, "jj.refresh", () => {
+  registerCommandWithLoading(context, "juju.refresh", () => {
     state.workspaceSCM.resetWatchers();
     return state.throttledPoll?.("force") ?? Promise.resolve();
   });
 
   context.subscriptions.push(
-    vscode.commands.registerCommand("jj.openFolderGitSettings", async (repoPath: string) => {
+    vscode.commands.registerCommand("juju.openFolderGitSettings", async (repoPath: string) => {
       if (!repoPath) {
         return;
       }
@@ -487,7 +487,7 @@ export function registerPreInitCommands(state: ExtensionState): void {
   );
 
   context.subscriptions.push(
-    vscode.commands.registerCommand("jj.openGlobalGitSettings", async () => {
+    vscode.commands.registerCommand("juju.openGlobalGitSettings", async () => {
       await vscode.commands.executeCommand("workbench.action.openSettings", {
         query: "git.enabled",
       });
@@ -496,7 +496,7 @@ export function registerPreInitCommands(state: ExtensionState): void {
 
   registerCommand(
     context,
-    "jj.openFileInWorkingCopyResourceState",
+    "juju.openFileInWorkingCopyResourceState",
     async (resourceState: vscode.SourceControlResourceState) => {
       await vscode.commands.executeCommand("vscode.open", toWorkspaceUri(resourceState.resourceUri.fsPath), {});
     },
@@ -505,7 +505,7 @@ export function registerPreInitCommands(state: ExtensionState): void {
 
   registerCommand(
     context,
-    "jj.openDiffResourceState",
+    "juju.openDiffResourceState",
     async (resourceState: vscode.SourceControlResourceState) => {
       const resourceGroup = state.workspaceSCM.getResourceGroupFromResourceState(resourceState);
       if (!resourceGroup) {
@@ -526,11 +526,11 @@ export function registerPreInitCommands(state: ExtensionState): void {
     { errorPrefix: "Failed to open diff" },
   );
 
-  registerCommand(context, "jj.copyPath", async (resourceState: vscode.SourceControlResourceState) => {
+  registerCommand(context, "juju.copyPath", async (resourceState: vscode.SourceControlResourceState) => {
     await vscode.env.clipboard.writeText(resourceState.resourceUri.fsPath);
   });
 
-  registerCommand(context, "jj.copyRelativePath", async (resourceState: vscode.SourceControlResourceState) => {
+  registerCommand(context, "juju.copyRelativePath", async (resourceState: vscode.SourceControlResourceState) => {
     const repo = state.workspaceSCM.getRepositoryFromUri(resourceState.resourceUri);
     if (!repo) {
       throw new Error("Repository not found");
@@ -544,7 +544,7 @@ export function registerPreInitCommands(state: ExtensionState): void {
 
   registerCommand(
     context,
-    "jj.openFileInWorkingCopyEditor",
+    "juju.openFileInWorkingCopyEditor",
     async (uri?: vscode.Uri) => {
       uri ??= vscode.window.activeTextEditor?.document.uri;
       if (!uri) {
@@ -557,12 +557,12 @@ export function registerPreInitCommands(state: ExtensionState): void {
 
   registerCommand(
     context,
-    "jj.openWorkingCopyFile",
+    "juju.openWorkingCopyFile",
     async (fileUri: vscode.Uri, fallback: { command: string; args: unknown[] }) => {
       const repoSCM = state.workspaceSCM.getRepositorySourceControlManagerFromUri(fileUri);
       const conflictedFiles = repoSCM?.status?.conflictedFiles;
       if (conflictedFiles?.has(normalizePath(toRealPathSpelling(fileUri.fsPath)))) {
-        await vscode.commands.executeCommand("jj.openMergeEditor", fileUri);
+        await vscode.commands.executeCommand("juju.openMergeEditor", fileUri);
       } else {
         await vscode.commands.executeCommand(fallback.command, ...fallback.args);
       }
@@ -570,7 +570,7 @@ export function registerPreInitCommands(state: ExtensionState): void {
     { errorPrefix: "Failed to open file" },
   );
 
-  registerCommand(context, "jj.openMergeEditor", async (uri: vscode.Uri, changeId?: FullChangeId | "@") => {
+  registerCommand(context, "juju.openMergeEditor", async (uri: vscode.Uri, changeId?: FullChangeId | "@") => {
     const repo = state.workspaceSCM.getRepositoryFromUri(uri);
     if (!repo) {
       throw new Error("Repository not found");
@@ -621,7 +621,7 @@ export function registerInitCommands(state: ExtensionState): void {
 
   registerCommand(
     context,
-    "jj.new",
+    "juju.new",
     async (sourceControl?: vscode.SourceControl) => {
       await createChange(state, sourceControl, false);
     },
@@ -630,7 +630,7 @@ export function registerInitCommands(state: ExtensionState): void {
 
   registerCommand(
     context,
-    "jj.newWithEditor",
+    "juju.newWithEditor",
     async (sourceControl?: vscode.SourceControl) => {
       await createChange(state, sourceControl, true);
     },
@@ -639,7 +639,7 @@ export function registerInitCommands(state: ExtensionState): void {
 
   registerCommand(
     context,
-    "jj.openFileResourceState",
+    "juju.openFileResourceState",
     async (resourceState: vscode.SourceControlResourceState) => {
       await vscode.commands.executeCommand("vscode.open", toWorkspaceUri(resourceState.resourceUri.fsPath), {
         preserveFocus: false,
@@ -652,7 +652,7 @@ export function registerInitCommands(state: ExtensionState): void {
 
   registerCommand(
     context,
-    "jj.openFileAtRevision",
+    "juju.openFileAtRevision",
     async (resourceState: vscode.SourceControlResourceState) => {
       const uri = resourceState.resourceUri;
       const rev = resolveRev(uri) ?? "@";
@@ -673,7 +673,7 @@ export function registerInitCommands(state: ExtensionState): void {
 
   registerCommand(
     context,
-    "jj.toggleDiffView",
+    "juju.toggleDiffView",
     async () => {
       const diffInput = getActiveTextEditorDiff();
 
@@ -703,15 +703,15 @@ export function registerInitCommands(state: ExtensionState): void {
         return;
       }
 
-      // A diff from the SCM view pairs a `jj://` resource holding the change's
-      // original content (`diffOriginalRev`) with either a `jj://` resource
+      // A diff from the SCM view pairs a `juju://` resource holding the change's
+      // original content (`diffOriginalRev`) with either a `juju://` resource
       // pinned to the change (`rev`) or a `file://` working-copy file. Toggle
       // by opening the modified side as a single editor. The modified side of
       // a deletion diff is an empty "deleted" resource, which cannot be toggled
       // (the button is hidden for those diffs).
       let singleEditorUri: vscode.Uri | undefined;
       let rev: string | undefined;
-      if (modified.scheme !== "jj") {
+      if (modified.scheme !== "juju") {
         singleEditorUri = modified;
         rev = resolveRev(modified);
       } else {
@@ -751,7 +751,7 @@ export function registerInitCommands(state: ExtensionState): void {
 
   registerCommandWithLoading(
     context,
-    "jj.restoreResourceState",
+    "juju.restoreResourceState",
     async (...resourceStates: vscode.SourceControlResourceState[]) => {
       const resourceGroup = getSharedResourceGroup(resourceStates, state);
       const repository = getRequiredRepoFromGroup(state, resourceGroup);
@@ -820,7 +820,7 @@ export function registerInitCommands(state: ExtensionState): void {
 
   registerCommandWithLoading(
     context,
-    "jj.squashToParentResourceState",
+    "juju.squashToParentResourceState",
     async (...resourceStates: vscode.SourceControlResourceState[]) => {
       const resourceGroup = getSharedResourceGroup(resourceStates, state);
       const repository = getRequiredRepoFromGroup(state, resourceGroup);
@@ -841,7 +841,7 @@ export function registerInitCommands(state: ExtensionState): void {
 
   registerCommandWithLoading(
     context,
-    "jj.squashToWorkingCopyResourceState",
+    "juju.squashToWorkingCopyResourceState",
     async (...resourceStates: vscode.SourceControlResourceState[]) => {
       const resourceGroup = getSharedResourceGroup(resourceStates, state);
       const scm = state.workspaceSCM.getRepositorySourceControlManagerFromResourceGroup(resourceGroup);
@@ -867,7 +867,7 @@ export function registerInitCommands(state: ExtensionState): void {
 
   registerCommand(
     context,
-    "jj.describe",
+    "juju.describe",
     async (resourceGroup: vscode.SourceControlResourceGroup) => {
       const scm = state.workspaceSCM.getRepositorySourceControlManagerFromResourceGroup(resourceGroup);
       const repository = getRequiredRepoFromGroup(state, resourceGroup);
@@ -883,7 +883,7 @@ export function registerInitCommands(state: ExtensionState): void {
 
   registerCommandWithLoading(
     context,
-    "jj.squashToParentResourceGroup",
+    "juju.squashToParentResourceGroup",
     async (resourceGroup: vscode.SourceControlResourceGroup) => {
       const repository = getRequiredRepoFromGroup(state, resourceGroup);
 
@@ -902,7 +902,7 @@ export function registerInitCommands(state: ExtensionState): void {
 
   registerCommandWithLoading(
     context,
-    "jj.squashToWorkingCopyResourceGroup",
+    "juju.squashToWorkingCopyResourceGroup",
     async (resourceGroup: vscode.SourceControlResourceGroup) => {
       const scm = state.workspaceSCM.getRepositorySourceControlManagerFromResourceGroup(resourceGroup);
       if (scm?.selectedCommitResourceGroup === resourceGroup) {
@@ -926,7 +926,7 @@ export function registerInitCommands(state: ExtensionState): void {
 
   registerCommandWithLoading(
     context,
-    "jj.restoreResourceGroup",
+    "juju.restoreResourceGroup",
     async (resourceGroup: vscode.SourceControlResourceGroup) => {
       const scm = state.workspaceSCM.getRepositorySourceControlManagerFromResourceGroup(resourceGroup);
       if (scm?.selectedCommitResourceGroup === resourceGroup) {
@@ -948,7 +948,7 @@ export function registerInitCommands(state: ExtensionState): void {
 
   registerCommand(
     context,
-    "jj.editResourceGroup",
+    "juju.editResourceGroup",
     async (resourceGroup: vscode.SourceControlResourceGroup) => {
       const repository = getRequiredRepoFromGroup(state, resourceGroup);
       await repository.editRetryImmutable(resourceGroup.id as FullChangeId | "@");
@@ -958,7 +958,7 @@ export function registerInitCommands(state: ExtensionState): void {
 
   registerCommand(
     context,
-    "jj.viewInterdiff",
+    "juju.viewInterdiff",
     async (resourceGroup: vscode.SourceControlResourceGroup) => {
       const scm = state.workspaceSCM.getRepositorySourceControlManagerFromResourceGroup(resourceGroup);
       if (!scm) {
@@ -971,7 +971,7 @@ export function registerInitCommands(state: ExtensionState): void {
 
   registerCommand(
     context,
-    "jj.viewRegularDiff",
+    "juju.viewRegularDiff",
     async (resourceGroup: vscode.SourceControlResourceGroup) => {
       const scm = state.workspaceSCM.getRepositorySourceControlManagerFromResourceGroup(resourceGroup);
       if (!scm) {
@@ -984,7 +984,7 @@ export function registerInitCommands(state: ExtensionState): void {
 
   registerCommand(
     context,
-    "jj.refreshGraphWebview",
+    "juju.refreshGraphWebview",
     async () => {
       state.workspaceSCM.resetWatchers();
       await state.graphWebview!.refresh();
@@ -993,34 +993,34 @@ export function registerInitCommands(state: ExtensionState): void {
   );
 
   context.subscriptions.push(
-    vscode.commands.registerCommand("jj.openDetailsWebview", () => state.detailsWebview!.open()),
+    vscode.commands.registerCommand("juju.openDetailsWebview", () => state.detailsWebview!.open()),
   );
 
   context.subscriptions.push(
-    vscode.commands.registerCommand("jj.openGraphInTab", () => state.graphWebview!.openInTab()),
+    vscode.commands.registerCommand("juju.openGraphInTab", () => state.graphWebview!.openInTab()),
   );
 
   context.subscriptions.push(
-    vscode.commands.registerCommand("jj.showChangeDetailsWebview", (commitId: string, shortChangeId: string) =>
+    vscode.commands.registerCommand("juju.showChangeDetailsWebview", (commitId: string, shortChangeId: string) =>
       state.detailsWebview!.showChange(commitId, shortChangeId),
     ),
   );
 
   context.subscriptions.push(
-    vscode.commands.registerCommand("jj.toggleElideImmutableCommits.show", async () => {
+    vscode.commands.registerCommand("juju.toggleElideImmutableCommits.show", async () => {
       await state.graphWebview!.disableElideImmutableCommits();
     }),
   );
 
   context.subscriptions.push(
-    vscode.commands.registerCommand("jj.toggleElideImmutableCommits.elide", async () => {
+    vscode.commands.registerCommand("juju.toggleElideImmutableCommits.elide", async () => {
       await state.graphWebview!.enableElideImmutableCommits();
     }),
   );
 
   registerCommand(
     context,
-    "jj.newGraphWebview",
+    "juju.newGraphWebview",
     async () => {
       const selectedNodes = Array.from(state.graphWebview!.selectedNodes);
       if (selectedNodes.length < 1) {
@@ -1031,7 +1031,7 @@ export function registerInitCommands(state: ExtensionState): void {
     { errorPrefix: "Failed to create change" },
   );
 
-  for (const command of ["jj.selectGraphWebviewRepo", "jj.selectOperationLogRepo"]) {
+  for (const command of ["juju.selectGraphWebviewRepo", "juju.selectOperationLogRepo"]) {
     registerCommand(
       context,
       command,
@@ -1042,14 +1042,14 @@ export function registerInitCommands(state: ExtensionState): void {
     );
   }
 
-  registerCommand(context, "jj.refreshOperationLog", async () => {
+  registerCommand(context, "juju.refreshOperationLog", async () => {
     state.workspaceSCM.resetWatchers();
     await state.operationLogManager!.refresh();
   });
 
   context.subscriptions.push(
-    vscode.commands.registerCommand("jj.gitFetch.syncing", () => {
-      if (cancelSyncingOperations("jj.fetching")) {
+    vscode.commands.registerCommand("juju.gitFetch.syncing", () => {
+      if (cancelSyncingOperations("juju.fetching")) {
         vscode.window.showWarningMessage(
           "Cancelled the ongoing fetch. The fetch may already have succeeded. Please fetch again to reconcile the state.",
         );
@@ -1057,8 +1057,8 @@ export function registerInitCommands(state: ExtensionState): void {
     }),
   );
   context.subscriptions.push(
-    vscode.commands.registerCommand("jj.graphFetchSubmenu.syncing", () => {
-      if (cancelSyncingOperations("jj.fetchPushSyncing")) {
+    vscode.commands.registerCommand("juju.graphFetchSubmenu.syncing", () => {
+      if (cancelSyncingOperations("juju.fetchPushSyncing")) {
         vscode.window.showWarningMessage(
           "Cancelled the ongoing fetch/push. The operation may already have succeeded. Please fetch from the remote to reconcile the state.",
         );
@@ -1068,43 +1068,43 @@ export function registerInitCommands(state: ExtensionState): void {
 
   registerCommand(
     context,
-    "jj.gitFetch",
+    "juju.gitFetch",
     async () => {
       const repository = state.getSelectedRepo();
       if (!repository) {
         return;
       }
-      await withSyncingCancellation("jj.fetching", async (token) => {
+      await withSyncingCancellation("juju.fetching", async (token) => {
         reportFetchResult(await repository.gitFetch(token));
       });
     },
     { errorPrefix: "Failed to fetch from remote" },
   );
 
-  registerCommand(context, "jj.gitFetchAllRemotes", () => fetchAllRemotesAction(state, false), {
+  registerCommand(context, "juju.gitFetchAllRemotes", () => fetchAllRemotesAction(state, false), {
     errorPrefix: "Failed to fetch from all remotes",
   });
-  registerCommand(context, "jj.graphFetchSubmenu.fetchAllRemotes", () => fetchAllRemotesAction(state, true), {
+  registerCommand(context, "juju.graphFetchSubmenu.fetchAllRemotes", () => fetchAllRemotesAction(state, true), {
     errorPrefix: "Failed to fetch from all remotes",
   });
 
-  registerCommand(context, "jj.gitFetchFromRemote", () => fetchFromRemoteAction(state, false), {
+  registerCommand(context, "juju.gitFetchFromRemote", () => fetchFromRemoteAction(state, false), {
     errorPrefix: "Failed to fetch from remote",
   });
-  registerCommand(context, "jj.graphFetchSubmenu.fetchFromRemote", () => fetchFromRemoteAction(state, true), {
+  registerCommand(context, "juju.graphFetchSubmenu.fetchFromRemote", () => fetchFromRemoteAction(state, true), {
     errorPrefix: "Failed to fetch from remote",
   });
 
-  registerCommand(context, "jj.gitPushToRemote", () => pushToRemoteAction(state, false), {
+  registerCommand(context, "juju.gitPushToRemote", () => pushToRemoteAction(state, false), {
     errorPrefix: "Failed to push to remote",
   });
-  registerCommand(context, "jj.graphFetchSubmenu.pushToRemote", () => pushToRemoteAction(state, true), {
+  registerCommand(context, "juju.graphFetchSubmenu.pushToRemote", () => pushToRemoteAction(state, true), {
     errorPrefix: "Failed to push to remote",
   });
 
   for (const [command, method] of [
-    ["jj.undo", "undo"],
-    ["jj.redo", "redo"],
+    ["juju.undo", "undo"],
+    ["juju.redo", "redo"],
   ] as const) {
     registerCommand(context, command, async () => {
       const repository = state.getSelectedRepo();
@@ -1118,8 +1118,8 @@ export function registerInitCommands(state: ExtensionState): void {
   }
 
   for (const [command, action, errorPrefix] of [
-    ["jj.operationRevert", "operationRevert", "Failed to revert operation"],
-    ["jj.operationRestore", "operationRestore", "Failed to restore operation"],
+    ["juju.operationRevert", "operationRevert", "Failed to revert operation"],
+    ["juju.operationRestore", "operationRestore", "Failed to restore operation"],
   ] as const) {
     registerCommand(
       context,
@@ -1140,17 +1140,17 @@ export function registerInitCommands(state: ExtensionState): void {
     );
   }
 
-  registerCommand(context, "jj.openParentChange", async (uri?: vscode.Uri) => {
+  registerCommand(context, "juju.openParentChange", async (uri?: vscode.Uri) => {
     await navigateToRelativeChange(uri, "{}-", state);
   });
 
-  registerCommand(context, "jj.openChildChange", async (uri?: vscode.Uri) => {
+  registerCommand(context, "juju.openChildChange", async (uri?: vscode.Uri) => {
     await navigateToRelativeChange(uri, "{}+", state);
   });
 
   registerCommandWithLoading(
     context,
-    "jj.trackUntrackedFile",
+    "juju.trackUntrackedFile",
     async (resourceState: vscode.SourceControlResourceState) => {
       const scm = state.workspaceSCM.getRepositorySourceControlManagerFromUri(resourceState.resourceUri);
       if (!scm) {
@@ -1165,7 +1165,7 @@ export function registerInitCommands(state: ExtensionState): void {
 
   registerCommand(
     context,
-    "jj.deleteUntrackedFile",
+    "juju.deleteUntrackedFile",
     async (resourceState: vscode.SourceControlResourceState) => {
       const scm = state.workspaceSCM.getRepositorySourceControlManagerFromUri(resourceState.resourceUri);
       if (!scm) {
@@ -1194,7 +1194,7 @@ export function registerInitCommands(state: ExtensionState): void {
 
   registerCommandWithLoading(
     context,
-    "jj.trackAllUntrackedFiles",
+    "juju.trackAllUntrackedFiles",
     async (resourceGroup: vscode.SourceControlResourceGroup) => {
       const scm = state.workspaceSCM.getRepositorySourceControlManagerFromResourceGroup(resourceGroup);
       if (!scm) {
@@ -1212,7 +1212,7 @@ export function registerInitCommands(state: ExtensionState): void {
 
   registerCommand(
     context,
-    "jj.deleteAllUntrackedFiles",
+    "juju.deleteAllUntrackedFiles",
     async (resourceGroup: vscode.SourceControlResourceGroup) => {
       const scm = state.workspaceSCM.getRepositorySourceControlManagerFromResourceGroup(resourceGroup);
       if (!scm) {
@@ -1238,7 +1238,7 @@ export function registerInitCommands(state: ExtensionState): void {
   );
 
   context.subscriptions.push(
-    vscode.commands.registerCommand("jj.squashSelectedRanges", async () => {
+    vscode.commands.registerCommand("juju.squashSelectedRanges", async () => {
       // this is based on the Git extension's git.stageSelectedRanges function
       // https://github.com/microsoft/vscode/blob/bd05fbbcb0dbc153f85dd118b5729bde34b91f2f/extensions/git/src/commands.ts#L1646
       try {
@@ -1328,7 +1328,7 @@ export function registerInitCommands(state: ExtensionState): void {
         const diffInput = getActiveTextEditorDiff();
 
         const originalParams =
-          diffInput && diffInput.modified.scheme === "file" && diffInput.original.scheme === "jj"
+          diffInput && diffInput.modified.scheme === "file" && diffInput.original.scheme === "juju"
             ? getParams(diffInput.original)
             : undefined;
         const isDiffOriginalRevMatch =

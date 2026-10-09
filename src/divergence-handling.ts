@@ -9,7 +9,7 @@ import { DIVERGENCE_BACKOFF } from "./constants";
  *
  * The caller-supplied `delay` resolves the backoff promise; the caller controls cancellation
  * (e.g. via a vscode.CancellationToken) by resolving early. The randomization of the delay breaks
- * the phase-lock between multiple jjx instances sharing one repository, so their reconciliations
+ * the phase-lock between multiple Juju instances sharing one repository, so their reconciliations
  * cannot sustain a cascade.
  *
  * `maxRetries` controls how many delay+recheck cycles happen before reconciling. The default of 1

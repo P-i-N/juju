@@ -70,8 +70,8 @@ and error messages for failing or noisy results. Read the resulting log to diagn
 | `src/split-protocol.ts`          | TypeScript interfaces for split view data (webview IPC)           |
 | `src/split/`                     | Hunk/checkbox model backing the split view                        |
 | `src/webview/split/`             | Split view UI (Preact)                                            |
-| `src/file-system-provider.ts`    | Virtual file system for `jj://` URIs                              |
-| `src/uri.ts`                     | Constructs and parses `jj://` scheme URIs                         |
+| `src/file-system-provider.ts`    | Virtual file system for `juju://` URIs                            |
+| `src/uri.ts`                     | Constructs and parses `juju://` scheme URIs                       |
 | `src/annotations.ts`             | Inline editor decorations showing change IDs (`jj file annotate`) |
 | `src/diff-utils.ts`              | Line-level diff computation for editor decorations                |
 | `src/ipc/`                       | IPC server/client for extension subprocess communication          |

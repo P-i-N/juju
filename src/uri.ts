@@ -62,7 +62,7 @@ function isJJUriParams(v: unknown): v is JJUriParams {
  */
 export function toJJUri(uri: Uri, params: JJUriParams): Uri {
   return uri.with({
-    scheme: "jj",
+    scheme: "juju",
     query: JSON.stringify(params),
   });
 }
@@ -89,7 +89,7 @@ export function resolveRev(
     return "@";
   }
 
-  if (uri.scheme !== "jj") {
+  if (uri.scheme !== "juju") {
     return undefined;
   }
 
@@ -123,7 +123,7 @@ export function resolveRev(
  * (`jj diff --from --to`). Such editors can't be toggled to a single-revision view.
  */
 export function isComparisonDiffUri(uri: Uri): boolean {
-  if (uri.scheme !== "jj" || uri.query === "") {
+  if (uri.scheme !== "juju" || uri.query === "") {
     return false;
   }
   try {
@@ -139,7 +139,7 @@ export function isComparisonDiffUri(uri: Uri): boolean {
  * of a diff whose file was removed.
  */
 export function isDeletedDiffUri(uri: Uri): boolean {
-  if (uri.scheme !== "jj" || uri.query === "") {
+  if (uri.scheme !== "juju" || uri.query === "") {
     return false;
   }
   try {

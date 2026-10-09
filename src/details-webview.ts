@@ -113,7 +113,7 @@ export class DetailsWebview implements vscode.Disposable {
     pinnedCommitId: string | undefined,
     onDispose: (detailsPanel: DetailsPanel) => void,
   ): DetailsPanel {
-    const panel = vscode.window.createWebviewPanel("jjDetailsView", title, vscode.ViewColumn.Active, {
+    const panel = vscode.window.createWebviewPanel("jujuDetailsView", title, vscode.ViewColumn.Active, {
       enableScripts: true,
       localResourceRoots: [this.extensionUri],
       retainContextWhenHidden: true,

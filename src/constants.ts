@@ -45,7 +45,7 @@ export const JJ_VERSION_WITH_OPERATION_ATTRIBUTES: JJVersion = { major: 0, minor
 export const JJ_VERSION_WITH_TAG_TRACKING: JJVersion = { major: 0, minor: 44, patch: 0 };
 
 // Backoff before reconciling divergent operation heads. The randomized delay breaks the phase-lock
-// between multiple jjx instances sharing one repository (e.g. over a network/shared filesystem),
+// between multiple Juju instances sharing one repository (e.g. over a network/shared filesystem),
 // so their reconciliations cannot sustain a cascade.
 export const DIVERGENCE_BACKOFF = {
   BASE_MS: 250,

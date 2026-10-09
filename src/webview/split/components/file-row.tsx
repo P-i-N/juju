@@ -30,13 +30,13 @@ import { hasExpandableSplitEntries, hunkKey, modeChangeOf, sameSplitRow, splitFi
 import { TriStateCheckbox } from "./tri-state-checkbox";
 
 const STATUS_COLORS: Record<FileStatusType, string> = {
-  A: "var(--vscode-jjDecoration-addedResourceForeground, #81b88b)",
-  M: "var(--vscode-jjDecoration-modifiedResourceForeground, #e2c08d)",
-  D: "var(--vscode-jjDecoration-deletedResourceForeground, #c74e39)",
-  R: "var(--vscode-jjDecoration-renamedResourceForeground, #73c991)",
-  C: "var(--vscode-jjDecoration-renamedResourceForeground, #73c991)",
-  X: "var(--vscode-jjDecoration-conflictingResourceForeground, #e4676b)",
-  "?": "var(--vscode-jjDecoration-untrackedResourceForeground, #b4b4b4)",
+  A: "var(--vscode-jujuDecoration-addedResourceForeground, #81b88b)",
+  M: "var(--vscode-jujuDecoration-modifiedResourceForeground, #e2c08d)",
+  D: "var(--vscode-jujuDecoration-deletedResourceForeground, #c74e39)",
+  R: "var(--vscode-jujuDecoration-renamedResourceForeground, #73c991)",
+  C: "var(--vscode-jujuDecoration-renamedResourceForeground, #73c991)",
+  X: "var(--vscode-jujuDecoration-conflictingResourceForeground, #e4676b)",
+  "?": "var(--vscode-jujuDecoration-untrackedResourceForeground, #b4b4b4)",
 };
 
 /** Strips the line terminator kept by the hunk model so lines render as single rows. */

@@ -9,7 +9,7 @@ export class OperationLogManager {
   operationLogTreeView: TreeView<OperationTreeItem>;
 
   constructor(public operationLogTreeDataProvider: OperationLogTreeDataProvider) {
-    this.operationLogTreeView = window.createTreeView<OperationTreeItem>("jjOperationLog", {
+    this.operationLogTreeView = window.createTreeView<OperationTreeItem>("jujuOperationLog", {
       treeDataProvider: operationLogTreeDataProvider,
     });
     const repoRoot = operationLogTreeDataProvider.getSelectedRepo()?.repositoryRoot;

@@ -29,7 +29,7 @@ export class SplitWebview {
     const entries = await repo.getSplitFileEntries(commitId);
 
     const panel = vscode.window.createWebviewPanel(
-      "jjSplitView",
+      "jujuSplitView",
       `Split ${shortChangeId}: ${truncateDescription(descriptionFirstLine)}`,
       vscode.ViewColumn.Active,
       {

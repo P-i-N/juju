@@ -332,11 +332,11 @@ body {
 }
 
 .splitAdded {
-  color: var(--vscode-jjDecoration-addedResourceForeground, #81b88b);
+  color: var(--vscode-jujuDecoration-addedResourceForeground, #81b88b);
 }
 
 .splitRemoved {
-  color: var(--vscode-jjDecoration-deletedResourceForeground, #c74e39);
+  color: var(--vscode-jujuDecoration-deletedResourceForeground, #c74e39);
 }
 
 .splitLineText {

@@ -37,7 +37,7 @@ import { joinRepositoryPath, repositoryRelativePath, toWorkspaceUri } from "./wo
 import { DEFAULT_CHANGE_DOUBLE_CLICK_ACTION, resolveDoubleClickAction } from "./double-click-action";
 
 const rootChangeId = "z".repeat(32);
-const GRAPH_TAB_VIEW_TYPE = "jjGraphTab";
+const GRAPH_TAB_VIEW_TYPE = "jujuGraphTab";
 
 export interface GraphSelection {
   id: ChangeId;
@@ -94,7 +94,7 @@ export class JJGraphWebview implements vscode.WebviewViewProvider {
 
     // Register the webview provider
     context.subscriptions.push(
-      vscode.window.registerWebviewViewProvider("jjGraphWebview", this, {
+      vscode.window.registerWebviewViewProvider("jujuGraphWebview", this, {
         webviewOptions: {
           retainContextWhenHidden: true,
         },
@@ -273,18 +273,18 @@ export class JJGraphWebview implements vscode.WebviewViewProvider {
         const selectedIds = message.selectedNodes.filter((id) => this.findRegularChange(id));
         this.selectedNodes = new Set(selectedIds);
         this.postMessageToWebview({ command: "setSelection", selectedNodes: selectedIds }, source);
-        vscode.commands.executeCommand("setContext", "jjGraphView.nodesSelected", selectedIds.length);
+        vscode.commands.executeCommand("setContext", "jujuGraphView.nodesSelected", selectedIds.length);
         void this.fireSelection(this.resolveSelection(selectedIds));
         break;
       }
       case "openDetailsView":
-        await vscode.commands.executeCommand("jj.openDetailsWebview");
+        await vscode.commands.executeCommand("juju.openDetailsWebview");
         break;
       case "showChangeDetails": {
         const change = this.findRegularChange(message.changeId);
         if (change) {
           await vscode.commands.executeCommand(
-            "jj.showChangeDetailsWebview",
+            "juju.showChangeDetailsWebview",
             change.commitId,
             formatChangeIdShort(change.id),
           );
@@ -1096,7 +1096,7 @@ export class JJGraphWebview implements vscode.WebviewViewProvider {
 
   private async updateElidingContext(): Promise<void> {
     const effectiveEliding = this.getEffectiveEliding();
-    await vscode.commands.executeCommand("setContext", "jjGraphView.elidingActive", effectiveEliding);
+    await vscode.commands.executeCommand("setContext", "jujuGraphView.elidingActive", effectiveEliding);
   }
 
   setRefreshHandler(handler: (repo: JJRepository) => Promise<void>): void {

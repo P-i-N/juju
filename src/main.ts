@@ -16,7 +16,7 @@ import { isComparisonDiffUri, isDeletedDiffUri } from "./uri";
 import { getActiveTextEditorDiff } from "./vscode-utils";
 
 export async function activate(context: vscode.ExtensionContext) {
-  const outputChannel = vscode.window.createOutputChannel("Jujutsu X", {
+  const outputChannel = vscode.window.createOutputChannel("Juju", {
     log: true,
   });
   initLogger(outputChannel);
@@ -73,12 +73,12 @@ export async function activate(context: vscode.ExtensionContext) {
     const diffInput = getActiveTextEditorDiff();
     const isComparisonDiff =
       !!diffInput && (isComparisonDiffUri(diffInput.original) || isComparisonDiffUri(diffInput.modified));
-    void vscode.commands.executeCommand("setContext", "jj.comparisonDiffActive", isComparisonDiff);
+    void vscode.commands.executeCommand("setContext", "juju.comparisonDiffActive", isComparisonDiff);
 
     // The modified side of a deletion diff is an empty "deleted" resource, so
     // toggling to a single editor is not possible. Hide the toggle button.
     const isDeletedDiff = !!diffInput && isDeletedDiffUri(diffInput.modified);
-    void vscode.commands.executeCommand("setContext", "jj.diffModifiedDeleted", isDeletedDiff);
+    void vscode.commands.executeCommand("setContext", "juju.diffModifiedDeleted", isDeletedDiff);
   };
   updateInterdiffContext();
   context.subscriptions.push(vscode.window.onDidChangeActiveTextEditor(updateInterdiffContext));

@@ -28,317 +28,317 @@
       "scm": [
         {
           "type": "webview",
-          "id": "jjGraphWebview",
+          "id": "jujuGraphWebview",
           "name": "JJ Graph",
-          "when": "jj.reposExist"
+          "when": "juju.reposExist"
         },
         {
-          "id": "jjOperationLog",
+          "id": "jujuOperationLog",
           "name": "JJ Operation Log",
-          "when": "jj.reposExist"
+          "when": "juju.reposExist"
         }
       ]
     },
     "commands": [
       {
-        "command": "jj.refresh",
+        "command": "juju.refresh",
         "title": "Refresh",
         "category": "Jujutsu",
         "icon": "$(refresh)",
         "enablement": "!operationInProgress"
       },
       {
-        "command": "jj.openFileResourceState",
+        "command": "juju.openFileResourceState",
         "title": "Open File",
         "category": "Jujutsu",
         "icon": "$(go-to-file)"
       },
       {
-        "command": "jj.openFileAtRevision",
+        "command": "juju.openFileAtRevision",
         "title": "Open File",
         "category": "Jujutsu",
         "icon": "$(eye)"
       },
       {
-        "command": "jj.toggleDiffView",
+        "command": "juju.toggleDiffView",
         "title": "Toggle Diff View",
         "category": "Jujutsu",
         "icon": "$(compare-changes)"
       },
       {
-        "command": "jj.openDiffResourceState",
+        "command": "juju.openDiffResourceState",
         "title": "View as Diff",
         "category": "Jujutsu",
         "icon": "$(compare-changes)"
       },
       {
-        "command": "jj.openFileInWorkingCopyEditor",
+        "command": "juju.openFileInWorkingCopyEditor",
         "title": "Open File in Working Copy",
         "category": "Jujutsu",
         "icon": "$(go-to-file)"
       },
       {
-        "command": "jj.openFileInWorkingCopyResourceState",
+        "command": "juju.openFileInWorkingCopyResourceState",
         "title": "Open File in Working Copy",
         "category": "Jujutsu",
         "icon": "$(go-to-file)"
       },
       {
-        "command": "jj.describe",
+        "command": "juju.describe",
         "title": "Update Change Description",
         "category": "Jujutsu",
         "icon": "$(edit)"
       },
       {
-        "command": "jj.new",
+        "command": "juju.new",
         "title": "Create New Change",
         "category": "Jujutsu",
         "icon": "$(plus)"
       },
       {
-        "command": "jj.newWithEditor",
+        "command": "juju.newWithEditor",
         "title": "Create New Change with Editor",
         "category": "Jujutsu"
       },
       {
-        "command": "jj.squashToParentResourceGroup",
+        "command": "juju.squashToParentResourceGroup",
         "title": "Move Changes to Parent",
         "category": "Jujutsu",
         "icon": "$(arrow-down)"
       },
       {
-        "command": "jj.squashToWorkingCopyResourceGroup",
+        "command": "juju.squashToWorkingCopyResourceGroup",
         "title": "Move Changes to Working Copy",
         "category": "Jujutsu",
         "icon": "$(arrow-up)"
       },
       {
-        "command": "jj.squashToParentResourceState",
+        "command": "juju.squashToParentResourceState",
         "title": "Move Changes to Parent",
         "category": "Jujutsu",
         "icon": "$(arrow-down)"
       },
       {
-        "command": "jj.squashToWorkingCopyResourceState",
+        "command": "juju.squashToWorkingCopyResourceState",
         "title": "Move Changes to Working Copy",
         "category": "Jujutsu",
         "icon": "$(arrow-up)"
       },
       {
-        "command": "jj.editResourceGroup",
+        "command": "juju.editResourceGroup",
         "title": "Edit This Change",
         "category": "Jujutsu",
         "icon": "$(sign-in)"
       },
       {
-        "command": "jj.viewInterdiff",
+        "command": "juju.viewInterdiff",
         "title": "View Interdiff",
         "category": "Jujutsu",
         "icon": "$(compare-changes)"
       },
       {
-        "command": "jj.viewRegularDiff",
+        "command": "juju.viewRegularDiff",
         "title": "View Regular Diff",
         "category": "Jujutsu",
         "icon": "$(diff)"
       },
       {
-        "command": "jj.restoreResourceState",
+        "command": "juju.restoreResourceState",
         "title": "Discard Changes",
         "category": "Jujutsu",
         "icon": "$(discard)"
       },
       {
-        "command": "jj.restoreResourceGroup",
+        "command": "juju.restoreResourceGroup",
         "title": "Discard Changes",
         "category": "Jujutsu",
         "icon": "$(discard)"
       },
       {
-        "command": "jj.gitFetch",
+        "command": "juju.gitFetch",
         "title": "Fetch from Default Remote",
         "category": "Jujutsu",
         "icon": "$(cloud-download)"
       },
       {
-        "command": "jj.gitFetch.syncing",
+        "command": "juju.gitFetch.syncing",
         "title": "Fetching from Default Remote... (Click to Cancel)",
         "category": "Jujutsu",
         "icon": "$(sync~spin)"
       },
       {
-        "command": "jj.refreshOperationLog",
+        "command": "juju.refreshOperationLog",
         "title": "Refresh Operation Log",
         "category": "Jujutsu",
         "icon": "$(refresh)"
       },
       {
-        "command": "jj.selectOperationLogRepo",
+        "command": "juju.selectOperationLogRepo",
         "title": "Select Repository",
         "category": "Jujutsu",
         "icon": "$(repo)"
       },
       {
-        "command": "jj.undo",
+        "command": "juju.undo",
         "title": "Undo",
         "category": "Jujutsu",
         "icon": "$(discard)"
       },
       {
-        "command": "jj.redo",
+        "command": "juju.redo",
         "title": "Redo",
         "category": "Jujutsu",
         "icon": "$(redo)"
       },
       {
-        "command": "jj.operationRevert",
+        "command": "juju.operationRevert",
         "title": "Revert Operation",
         "category": "Jujutsu",
         "icon": "$(discard)"
       },
       {
-        "command": "jj.operationRestore",
+        "command": "juju.operationRestore",
         "title": "Restore Repo to the State at This Operation",
         "category": "Jujutsu",
         "icon": "$(history)"
       },
       {
-        "command": "jj.refreshGraphWebview",
+        "command": "juju.refreshGraphWebview",
         "title": "Refresh JJ Graph",
         "category": "Jujutsu",
         "icon": "$(refresh)"
       },
       {
-        "command": "jj.openDetailsWebview",
+        "command": "juju.openDetailsWebview",
         "title": "Show Details of Selected Change",
         "category": "Jujutsu",
         "icon": "$(info)"
       },
       {
-        "command": "jj.openGraphInTab",
+        "command": "juju.openGraphInTab",
         "title": "Open Graph in Tab",
         "category": "Jujutsu",
         "icon": "$(link-external)"
       },
       {
-        "command": "jj.toggleElideImmutableCommits.show",
+        "command": "juju.toggleElideImmutableCommits.show",
         "title": "Show Elided Commits",
         "category": "Jujutsu",
         "icon": "$(unfold)"
       },
       {
-        "command": "jj.toggleElideImmutableCommits.elide",
+        "command": "juju.toggleElideImmutableCommits.elide",
         "title": "Elide Immutable Commits",
         "category": "Jujutsu",
         "icon": "$(fold)"
       },
       {
-        "command": "jj.newGraphWebview",
+        "command": "juju.newGraphWebview",
         "title": "Create New Change with Selected as Parents",
         "category": "Jujutsu",
         "icon": "$(plus)"
       },
       {
-        "command": "jj.selectGraphWebviewRepo",
+        "command": "juju.selectGraphWebviewRepo",
         "title": "Select Repository",
         "category": "Jujutsu",
         "icon": "$(repo)"
       },
       {
-        "command": "jj.placeholderForFolders",
+        "command": "juju.placeholderForFolders",
         "title": "​",
         "category": "Jujutsu",
         "enablement": "false"
       },
       {
-        "command": "jj.squashSelectedRanges",
+        "command": "juju.squashSelectedRanges",
         "title": "Squash Selected Changes...",
         "category": "Jujutsu"
       },
       {
-        "command": "jj.openParentChange",
+        "command": "juju.openParentChange",
         "title": "Open Parent Change",
         "category": "Jujutsu",
         "icon": "$(arrow-left)"
       },
       {
-        "command": "jj.openChildChange",
+        "command": "juju.openChildChange",
         "title": "Open Child Change",
         "category": "Jujutsu",
         "icon": "$(arrow-right)"
       },
       {
-        "command": "jj.copyPath",
+        "command": "juju.copyPath",
         "title": "Copy Path",
         "category": "Jujutsu"
       },
       {
-        "command": "jj.copyRelativePath",
+        "command": "juju.copyRelativePath",
         "title": "Copy Relative Path",
         "category": "Jujutsu"
       },
       {
-        "command": "jj.trackUntrackedFile",
+        "command": "juju.trackUntrackedFile",
         "title": "Track This File",
         "category": "Jujutsu",
         "icon": "$(plus)"
       },
       {
-        "command": "jj.deleteUntrackedFile",
+        "command": "juju.deleteUntrackedFile",
         "title": "Delete This File",
         "category": "Jujutsu",
         "icon": "$(trash)"
       },
       {
-        "command": "jj.trackAllUntrackedFiles",
+        "command": "juju.trackAllUntrackedFiles",
         "title": "Track All Untracked Files",
         "category": "Jujutsu",
         "icon": "$(plus)"
       },
       {
-        "command": "jj.deleteAllUntrackedFiles",
+        "command": "juju.deleteAllUntrackedFiles",
         "title": "Delete All Untracked Files",
         "category": "Jujutsu",
         "icon": "$(trash)"
       },
       {
-        "command": "jj.gitFetchAllRemotes",
+        "command": "juju.gitFetchAllRemotes",
         "title": "Fetch from All Remotes",
         "category": "Jujutsu",
         "icon": "$(cloud-download)"
       },
       {
-        "command": "jj.gitFetchFromRemote",
+        "command": "juju.gitFetchFromRemote",
         "title": "Fetch from Selected Remote...",
         "category": "Jujutsu",
         "icon": "$(repo-fetch)"
       },
       {
-        "command": "jj.gitPushToRemote",
+        "command": "juju.gitPushToRemote",
         "title": "Push to Selected Remote...",
         "category": "Jujutsu",
         "icon": "$(repo-push)"
       },
       {
-        "command": "jj.graphFetchSubmenu.fetchAllRemotes",
+        "command": "juju.graphFetchSubmenu.fetchAllRemotes",
         "title": "Fetch from All Remotes",
         "category": "Jujutsu",
         "icon": "$(cloud-download)"
       },
       {
-        "command": "jj.graphFetchSubmenu.fetchFromRemote",
+        "command": "juju.graphFetchSubmenu.fetchFromRemote",
         "title": "Fetch from Selected Remote...",
         "category": "Jujutsu",
         "icon": "$(repo-fetch)"
       },
       {
-        "command": "jj.graphFetchSubmenu.pushToRemote",
+        "command": "juju.graphFetchSubmenu.pushToRemote",
         "title": "Push to Selected Remote...",
         "category": "Jujutsu",
         "icon": "$(repo-push)"
       },
       {
-        "command": "jj.graphFetchSubmenu.syncing",
+        "command": "juju.graphFetchSubmenu.syncing",
         "title": "Fetch & Push in Progress... (Click to Cancel)",
         "category": "Jujutsu",
         "icon": "$(sync~spin)"
@@ -346,7 +346,7 @@
     ],
     "submenus": [
       {
-        "id": "jj.graphFetchSubmenu",
+        "id": "juju.graphFetchSubmenu",
         "label": "Fetch & Push...",
         "icon": "$(cloud)"
       }
@@ -354,522 +354,522 @@
     "menus": {
       "editor/title": [
         {
-          "command": "jj.squashSelectedRanges",
-          "when": "jj.reposExist && editorTextFocus && editorHasSelection && !editorReadonly"
+          "command": "juju.squashSelectedRanges",
+          "when": "juju.reposExist && editorTextFocus && editorHasSelection && !editorReadonly"
         },
         {
-          "command": "jj.toggleDiffView",
-          "when": "jj.reposExist && !jj.comparisonDiffActive && !jj.diffModifiedDeleted && activeWebviewPanelId != 'jjGraphTab'",
+          "command": "juju.toggleDiffView",
+          "when": "juju.reposExist && !juju.comparisonDiffActive && !juju.diffModifiedDeleted && activeWebviewPanelId != 'jujuGraphTab'",
           "group": "navigation@1"
         },
         {
-          "command": "jj.openFileInWorkingCopyEditor",
-          "when": "jj.reposExist && resourceScheme == jj",
+          "command": "juju.openFileInWorkingCopyEditor",
+          "when": "juju.reposExist && resourceScheme == juju",
           "group": "navigation@2"
         },
         {
-          "command": "jj.openParentChange",
-          "when": "jj.reposExist && !jj.comparisonDiffActive && activeWebviewPanelId != 'jjGraphTab'",
+          "command": "juju.openParentChange",
+          "when": "juju.reposExist && !juju.comparisonDiffActive && activeWebviewPanelId != 'jujuGraphTab'",
           "group": "navigation@2"
         },
         {
-          "command": "jj.openChildChange",
-          "when": "jj.reposExist && !jj.comparisonDiffActive && activeWebviewPanelId != 'jjGraphTab'",
+          "command": "juju.openChildChange",
+          "when": "juju.reposExist && !juju.comparisonDiffActive && activeWebviewPanelId != 'jujuGraphTab'",
           "group": "navigation@3"
         },
         {
-          "command": "jj.openDetailsWebview",
-          "when": "activeWebviewPanelId == 'jjGraphTab'",
+          "command": "juju.openDetailsWebview",
+          "when": "activeWebviewPanelId == 'jujuGraphTab'",
           "group": "navigation@0"
         },
         {
-          "command": "jj.gitFetch",
-          "when": "activeWebviewPanelId == 'jjGraphTab' && !jj.fetching",
+          "command": "juju.gitFetch",
+          "when": "activeWebviewPanelId == 'jujuGraphTab' && !juju.fetching",
           "group": "navigation@1"
         },
         {
-          "command": "jj.gitFetch.syncing",
-          "when": "activeWebviewPanelId == 'jjGraphTab' && jj.fetching",
+          "command": "juju.gitFetch.syncing",
+          "when": "activeWebviewPanelId == 'jujuGraphTab' && juju.fetching",
           "group": "navigation@1"
         },
         {
-          "submenu": "jj.graphFetchSubmenu",
-          "when": "activeWebviewPanelId == 'jjGraphTab' && !jj.fetchPushSyncing",
+          "submenu": "juju.graphFetchSubmenu",
+          "when": "activeWebviewPanelId == 'jujuGraphTab' && !juju.fetchPushSyncing",
           "group": "navigation@2"
         },
         {
-          "command": "jj.graphFetchSubmenu.syncing",
-          "when": "activeWebviewPanelId == 'jjGraphTab' && jj.fetchPushSyncing",
+          "command": "juju.graphFetchSubmenu.syncing",
+          "when": "activeWebviewPanelId == 'jujuGraphTab' && juju.fetchPushSyncing",
           "group": "navigation@2"
         },
         {
-          "command": "jj.undo",
-          "when": "activeWebviewPanelId == 'jjGraphTab'",
+          "command": "juju.undo",
+          "when": "activeWebviewPanelId == 'jujuGraphTab'",
           "group": "navigation@3"
         },
         {
-          "command": "jj.redo",
-          "when": "activeWebviewPanelId == 'jjGraphTab'",
+          "command": "juju.redo",
+          "when": "activeWebviewPanelId == 'jujuGraphTab'",
           "group": "navigation@4"
         },
         {
-          "command": "jj.refreshGraphWebview",
-          "when": "activeWebviewPanelId == 'jjGraphTab'",
+          "command": "juju.refreshGraphWebview",
+          "when": "activeWebviewPanelId == 'jujuGraphTab'",
           "group": "navigation@5"
         },
         {
-          "command": "jj.newGraphWebview",
-          "when": "activeWebviewPanelId == 'jjGraphTab' && jjGraphView.nodesSelected",
+          "command": "juju.newGraphWebview",
+          "when": "activeWebviewPanelId == 'jujuGraphTab' && jujuGraphView.nodesSelected",
           "group": "navigation@6"
         },
         {
-          "command": "jj.toggleElideImmutableCommits.show",
-          "when": "activeWebviewPanelId == 'jjGraphTab' && jjGraphView.elidingActive",
+          "command": "juju.toggleElideImmutableCommits.show",
+          "when": "activeWebviewPanelId == 'jujuGraphTab' && jujuGraphView.elidingActive",
           "group": "navigation@7"
         },
         {
-          "command": "jj.toggleElideImmutableCommits.elide",
-          "when": "activeWebviewPanelId == 'jjGraphTab' && !jjGraphView.elidingActive",
+          "command": "juju.toggleElideImmutableCommits.elide",
+          "when": "activeWebviewPanelId == 'jujuGraphTab' && !jujuGraphView.elidingActive",
           "group": "navigation@7"
         },
         {
-          "command": "jj.selectGraphWebviewRepo",
-          "when": "activeWebviewPanelId == 'jjGraphTab' && jj.hasMultipleRepos",
+          "command": "juju.selectGraphWebviewRepo",
+          "when": "activeWebviewPanelId == 'jujuGraphTab' && juju.hasMultipleRepos",
           "group": "navigation@8"
         }
       ],
       "editor/context": [
         {
-          "command": "jj.squashSelectedRanges",
-          "when": "jj.reposExist && editorTextFocus && editorHasSelection && !editorReadonly"
+          "command": "juju.squashSelectedRanges",
+          "when": "juju.reposExist && editorTextFocus && editorHasSelection && !editorReadonly"
         }
       ],
       "view/title": [
         {
-          "command": "jj.undo",
-          "when": "view == jjOperationLog",
+          "command": "juju.undo",
+          "when": "view == jujuOperationLog",
           "group": "navigation@1"
         },
         {
-          "command": "jj.redo",
-          "when": "view == jjOperationLog",
+          "command": "juju.redo",
+          "when": "view == jujuOperationLog",
           "group": "navigation@2"
         },
         {
-          "command": "jj.refreshOperationLog",
-          "when": "view == jjOperationLog",
+          "command": "juju.refreshOperationLog",
+          "when": "view == jujuOperationLog",
           "group": "navigation@3"
         },
         {
-          "command": "jj.selectOperationLogRepo",
-          "when": "view == jjOperationLog && jj.hasMultipleRepos",
+          "command": "juju.selectOperationLogRepo",
+          "when": "view == jujuOperationLog && juju.hasMultipleRepos",
           "group": "navigation@4"
         },
         {
-          "command": "jj.openDetailsWebview",
-          "when": "view == jjGraphWebview",
+          "command": "juju.openDetailsWebview",
+          "when": "view == jujuGraphWebview",
           "group": "navigation@0"
         },
         {
-          "command": "jj.gitFetch",
-          "when": "view == jjGraphWebview && !jj.fetching",
+          "command": "juju.gitFetch",
+          "when": "view == jujuGraphWebview && !juju.fetching",
           "group": "navigation@1"
         },
         {
-          "command": "jj.gitFetch.syncing",
-          "when": "view == jjGraphWebview && jj.fetching",
+          "command": "juju.gitFetch.syncing",
+          "when": "view == jujuGraphWebview && juju.fetching",
           "group": "navigation@1"
         },
         {
-          "submenu": "jj.graphFetchSubmenu",
-          "when": "view == jjGraphWebview && !jj.fetchPushSyncing",
+          "submenu": "juju.graphFetchSubmenu",
+          "when": "view == jujuGraphWebview && !juju.fetchPushSyncing",
           "group": "navigation@2"
         },
         {
-          "command": "jj.graphFetchSubmenu.syncing",
-          "when": "view == jjGraphWebview && jj.fetchPushSyncing",
+          "command": "juju.graphFetchSubmenu.syncing",
+          "when": "view == jujuGraphWebview && juju.fetchPushSyncing",
           "group": "navigation@2"
         },
         {
-          "command": "jj.undo",
-          "when": "view == jjGraphWebview",
+          "command": "juju.undo",
+          "when": "view == jujuGraphWebview",
           "group": "navigation@3"
         },
         {
-          "command": "jj.redo",
-          "when": "view == jjGraphWebview",
+          "command": "juju.redo",
+          "when": "view == jujuGraphWebview",
           "group": "navigation@4"
         },
         {
-          "command": "jj.refreshGraphWebview",
-          "when": "view == jjGraphWebview",
+          "command": "juju.refreshGraphWebview",
+          "when": "view == jujuGraphWebview",
           "group": "navigation@5"
         },
         {
-          "command": "jj.newGraphWebview",
-          "when": "view == jjGraphWebview && jjGraphView.nodesSelected",
+          "command": "juju.newGraphWebview",
+          "when": "view == jujuGraphWebview && jujuGraphView.nodesSelected",
           "group": "navigation@6"
         },
         {
-          "command": "jj.toggleElideImmutableCommits.show",
-          "when": "view == jjGraphWebview && jjGraphView.elidingActive",
+          "command": "juju.toggleElideImmutableCommits.show",
+          "when": "view == jujuGraphWebview && jujuGraphView.elidingActive",
           "group": "navigation@7"
         },
         {
-          "command": "jj.toggleElideImmutableCommits.elide",
-          "when": "view == jjGraphWebview && !jjGraphView.elidingActive",
+          "command": "juju.toggleElideImmutableCommits.elide",
+          "when": "view == jujuGraphWebview && !jujuGraphView.elidingActive",
           "group": "navigation@7"
         },
         {
-          "command": "jj.selectGraphWebviewRepo",
-          "when": "view == jjGraphWebview && jj.hasMultipleRepos",
+          "command": "juju.selectGraphWebviewRepo",
+          "when": "view == jujuGraphWebview && juju.hasMultipleRepos",
           "group": "navigation@8"
         },
         {
-          "command": "jj.openGraphInTab",
-          "when": "view == jjGraphWebview",
+          "command": "juju.openGraphInTab",
+          "when": "view == jujuGraphWebview",
           "group": "navigation@9"
         }
       ],
-      "jj.graphFetchSubmenu": [
+      "juju.graphFetchSubmenu": [
         {
-          "command": "jj.graphFetchSubmenu.fetchAllRemotes",
-          "when": "view == jjGraphWebview || activeWebviewPanelId == 'jjGraphTab'",
+          "command": "juju.graphFetchSubmenu.fetchAllRemotes",
+          "when": "view == jujuGraphWebview || activeWebviewPanelId == 'jujuGraphTab'",
           "group": "1_fetch@1"
         },
         {
-          "command": "jj.graphFetchSubmenu.fetchFromRemote",
-          "when": "view == jjGraphWebview || activeWebviewPanelId == 'jjGraphTab'",
+          "command": "juju.graphFetchSubmenu.fetchFromRemote",
+          "when": "view == jujuGraphWebview || activeWebviewPanelId == 'jujuGraphTab'",
           "group": "1_fetch@2"
         },
         {
-          "command": "jj.graphFetchSubmenu.pushToRemote",
-          "when": "view == jjGraphWebview || activeWebviewPanelId == 'jjGraphTab'",
+          "command": "juju.graphFetchSubmenu.pushToRemote",
+          "when": "view == jujuGraphWebview || activeWebviewPanelId == 'jujuGraphTab'",
           "group": "2_push@1"
         }
       ],
       "view/item/context": [
         {
-          "command": "jj.operationRevert",
-          "when": "view == jjOperationLog",
+          "command": "juju.operationRevert",
+          "when": "view == jujuOperationLog",
           "group": "inline"
         },
         {
-          "command": "jj.operationRestore",
-          "when": "view == jjOperationLog",
+          "command": "juju.operationRestore",
+          "when": "view == jujuOperationLog",
           "group": "inline"
         }
       ],
       "scm/title": [
         {
-          "command": "jj.refresh",
-          "when": "scmProvider == jj && jj.jjBinaryFound",
+          "command": "juju.refresh",
+          "when": "scmProvider == juju && juju.jjBinaryFound",
           "group": "navigation"
         },
         {
-          "command": "jj.new",
-          "when": "scmProvider == jj && jj.jjBinaryFound",
+          "command": "juju.new",
+          "when": "scmProvider == juju && juju.jjBinaryFound",
           "group": "navigation"
         }
       ],
       "scm/resourceGroup/context": [
         {
-          "command": "jj.squashToParentResourceGroup",
-          "when": "scmProvider == jj && scmResourceGroup == @ && jj.jjBinaryFound",
+          "command": "juju.squashToParentResourceGroup",
+          "when": "scmProvider == juju && scmResourceGroup == @ && juju.jjBinaryFound",
           "group": "inline"
         },
         {
-          "command": "jj.squashToWorkingCopyResourceGroup",
-          "when": "scmProvider == jj && scmResourceGroup != @ && scmResourceGroup != selected && scmResourceGroup != diff && scmResourceGroup != interdiff && scmResourceGroup != untracked && jj.jjBinaryFound",
+          "command": "juju.squashToWorkingCopyResourceGroup",
+          "when": "scmProvider == juju && scmResourceGroup != @ && scmResourceGroup != selected && scmResourceGroup != diff && scmResourceGroup != interdiff && scmResourceGroup != untracked && juju.jjBinaryFound",
           "group": "inline"
         },
         {
-          "command": "jj.restoreResourceGroup",
-          "when": "scmProvider == jj && scmResourceGroup != selected && scmResourceGroup != diff && scmResourceGroup != interdiff && scmResourceGroup != untracked && jj.jjBinaryFound",
+          "command": "juju.restoreResourceGroup",
+          "when": "scmProvider == juju && scmResourceGroup != selected && scmResourceGroup != diff && scmResourceGroup != interdiff && scmResourceGroup != untracked && juju.jjBinaryFound",
           "group": "inline"
         },
         {
-          "command": "jj.editResourceGroup",
-          "when": "scmProvider == jj && scmResourceGroup != @ && scmResourceGroup != diff && scmResourceGroup != interdiff && scmResourceGroup != untracked && jj.jjBinaryFound",
+          "command": "juju.editResourceGroup",
+          "when": "scmProvider == juju && scmResourceGroup != @ && scmResourceGroup != diff && scmResourceGroup != interdiff && scmResourceGroup != untracked && juju.jjBinaryFound",
           "group": "inline"
         },
         {
-          "command": "jj.describe",
-          "when": "scmProvider == jj && scmResourceGroup != diff && scmResourceGroup != interdiff && scmResourceGroup != untracked && jj.jjBinaryFound",
+          "command": "juju.describe",
+          "when": "scmProvider == juju && scmResourceGroup != diff && scmResourceGroup != interdiff && scmResourceGroup != untracked && juju.jjBinaryFound",
           "group": "inline"
         },
         {
-          "command": "jj.viewInterdiff",
-          "when": "scmProvider == jj && scmResourceGroup == diff && jj.jjBinaryFound",
+          "command": "juju.viewInterdiff",
+          "when": "scmProvider == juju && scmResourceGroup == diff && juju.jjBinaryFound",
           "group": "inline"
         },
         {
-          "command": "jj.viewRegularDiff",
-          "when": "scmProvider == jj && scmResourceGroup == interdiff && jj.jjBinaryFound",
+          "command": "juju.viewRegularDiff",
+          "when": "scmProvider == juju && scmResourceGroup == interdiff && juju.jjBinaryFound",
           "group": "inline"
         },
         {
-          "command": "jj.trackAllUntrackedFiles",
-          "when": "scmProvider == jj && scmResourceGroup == untracked && jj.jjBinaryFound",
+          "command": "juju.trackAllUntrackedFiles",
+          "when": "scmProvider == juju && scmResourceGroup == untracked && juju.jjBinaryFound",
           "group": "inline@1"
         },
         {
-          "command": "jj.deleteAllUntrackedFiles",
-          "when": "scmProvider == jj && scmResourceGroup == untracked && jj.jjBinaryFound",
+          "command": "juju.deleteAllUntrackedFiles",
+          "when": "scmProvider == juju && scmResourceGroup == untracked && juju.jjBinaryFound",
           "group": "inline@2"
         }
       ],
       "scm/resourceState/context": [
         {
-          "command": "jj.openDiffResourceState",
-          "when": "scmProvider == jj && scmResourceGroup != interdiff && scmResourceGroup != diff && scmResourceGroup != untracked && jj.jjBinaryFound",
+          "command": "juju.openDiffResourceState",
+          "when": "scmProvider == juju && scmResourceGroup != interdiff && scmResourceGroup != diff && scmResourceGroup != untracked && juju.jjBinaryFound",
           "group": "1_modification@1"
         },
         {
-          "command": "jj.openFileAtRevision",
-          "when": "scmProvider == jj && scmResourceGroup != interdiff && scmResourceGroup != diff && scmResourceGroup != untracked && (scmResourceGroup == @ || scmResourceState != 'status-d') && jj.jjBinaryFound",
+          "command": "juju.openFileAtRevision",
+          "when": "scmProvider == juju && scmResourceGroup != interdiff && scmResourceGroup != diff && scmResourceGroup != untracked && (scmResourceGroup == @ || scmResourceState != 'status-d') && juju.jjBinaryFound",
           "group": "1_modification@2"
         },
         {
-          "command": "jj.openFileInWorkingCopyResourceState",
-          "when": "scmProvider == jj && scmResourceGroup != @ && scmResourceGroup != untracked && jj.jjBinaryFound",
+          "command": "juju.openFileInWorkingCopyResourceState",
+          "when": "scmProvider == juju && scmResourceGroup != @ && scmResourceGroup != untracked && juju.jjBinaryFound",
           "group": "1_modification@3"
         },
         {
-          "command": "jj.copyPath",
-          "when": "scmProvider == jj && scmResourceGroup != untracked && jj.jjBinaryFound",
+          "command": "juju.copyPath",
+          "when": "scmProvider == juju && scmResourceGroup != untracked && juju.jjBinaryFound",
           "group": "9_copypath@1"
         },
         {
-          "command": "jj.copyRelativePath",
-          "when": "scmProvider == jj && scmResourceGroup != untracked && jj.jjBinaryFound",
+          "command": "juju.copyRelativePath",
+          "when": "scmProvider == juju && scmResourceGroup != untracked && juju.jjBinaryFound",
           "group": "9_copypath@2"
         },
         {
-          "command": "jj.openFileResourceState",
-          "when": "scmProvider == jj && scmResourceGroup == @ && config.juju.fileClickAction == 'diff' && jj.jjBinaryFound",
+          "command": "juju.openFileResourceState",
+          "when": "scmProvider == juju && scmResourceGroup == @ && config.juju.fileClickAction == 'diff' && juju.jjBinaryFound",
           "group": "inline@1"
         },
         {
-          "command": "jj.openDiffResourceState",
-          "when": "scmProvider == jj && scmResourceGroup == @ && config.juju.fileClickAction != 'diff' && jj.jjBinaryFound",
+          "command": "juju.openDiffResourceState",
+          "when": "scmProvider == juju && scmResourceGroup == @ && config.juju.fileClickAction != 'diff' && juju.jjBinaryFound",
           "group": "inline@1"
         },
         {
-          "command": "jj.openDiffResourceState",
-          "when": "scmProvider == jj && scmResourceGroup != @ && scmResourceGroup != interdiff && scmResourceGroup != diff && scmResourceGroup != untracked && config.juju.fileClickAction != 'diff' && jj.jjBinaryFound",
+          "command": "juju.openDiffResourceState",
+          "when": "scmProvider == juju && scmResourceGroup != @ && scmResourceGroup != interdiff && scmResourceGroup != diff && scmResourceGroup != untracked && config.juju.fileClickAction != 'diff' && juju.jjBinaryFound",
           "group": "inline@1"
         },
         {
-          "command": "jj.openFileAtRevision",
-          "when": "scmProvider == jj && scmResourceGroup != @ && scmResourceGroup != interdiff && scmResourceGroup != diff && scmResourceGroup != untracked && scmResourceState != 'status-d' && config.juju.fileClickAction != 'at-revision' && jj.jjBinaryFound",
+          "command": "juju.openFileAtRevision",
+          "when": "scmProvider == juju && scmResourceGroup != @ && scmResourceGroup != interdiff && scmResourceGroup != diff && scmResourceGroup != untracked && scmResourceState != 'status-d' && config.juju.fileClickAction != 'at-revision' && juju.jjBinaryFound",
           "group": "inline@2"
         },
         {
-          "command": "jj.openFileInWorkingCopyResourceState",
-          "when": "scmProvider == jj && scmResourceGroup != @ && scmResourceGroup != interdiff && scmResourceGroup != diff && scmResourceGroup != untracked && config.juju.fileClickAction != 'working-copy' && jj.jjBinaryFound",
+          "command": "juju.openFileInWorkingCopyResourceState",
+          "when": "scmProvider == juju && scmResourceGroup != @ && scmResourceGroup != interdiff && scmResourceGroup != diff && scmResourceGroup != untracked && config.juju.fileClickAction != 'working-copy' && juju.jjBinaryFound",
           "group": "inline@3"
         },
         {
-          "command": "jj.restoreResourceState",
-          "when": "scmProvider == jj && scmResourceGroup != selected && scmResourceGroup != interdiff && scmResourceGroup != diff && scmResourceGroup != untracked && jj.jjBinaryFound",
+          "command": "juju.restoreResourceState",
+          "when": "scmProvider == juju && scmResourceGroup != selected && scmResourceGroup != interdiff && scmResourceGroup != diff && scmResourceGroup != untracked && juju.jjBinaryFound",
           "group": "inline@4"
         },
         {
-          "command": "jj.squashToParentResourceState",
-          "when": "scmProvider == jj && scmResourceGroup == @ && jj.jjBinaryFound",
+          "command": "juju.squashToParentResourceState",
+          "when": "scmProvider == juju && scmResourceGroup == @ && juju.jjBinaryFound",
           "group": "inline@5"
         },
         {
-          "command": "jj.squashToWorkingCopyResourceState",
-          "when": "scmProvider == jj && scmResourceGroup != @ && scmResourceGroup != selected && scmResourceGroup != interdiff && scmResourceGroup != diff && scmResourceGroup != untracked && jj.jjBinaryFound",
+          "command": "juju.squashToWorkingCopyResourceState",
+          "when": "scmProvider == juju && scmResourceGroup != @ && scmResourceGroup != selected && scmResourceGroup != interdiff && scmResourceGroup != diff && scmResourceGroup != untracked && juju.jjBinaryFound",
           "group": "inline@5"
         },
         {
-          "command": "jj.openFileInWorkingCopyResourceState",
-          "when": "scmProvider == jj && scmResourceGroup == untracked && jj.jjBinaryFound",
+          "command": "juju.openFileInWorkingCopyResourceState",
+          "when": "scmProvider == juju && scmResourceGroup == untracked && juju.jjBinaryFound",
           "group": "1_modification@1"
         },
         {
-          "command": "jj.copyPath",
-          "when": "scmProvider == jj && scmResourceGroup == untracked && jj.jjBinaryFound",
+          "command": "juju.copyPath",
+          "when": "scmProvider == juju && scmResourceGroup == untracked && juju.jjBinaryFound",
           "group": "9_copypath@1"
         },
         {
-          "command": "jj.copyRelativePath",
-          "when": "scmProvider == jj && scmResourceGroup == untracked && jj.jjBinaryFound",
+          "command": "juju.copyRelativePath",
+          "when": "scmProvider == juju && scmResourceGroup == untracked && juju.jjBinaryFound",
           "group": "9_copypath@2"
         },
         {
-          "command": "jj.trackUntrackedFile",
-          "when": "scmProvider == jj && scmResourceGroup == untracked && jj.jjBinaryFound",
+          "command": "juju.trackUntrackedFile",
+          "when": "scmProvider == juju && scmResourceGroup == untracked && juju.jjBinaryFound",
           "group": "inline@1"
         },
         {
-          "command": "jj.deleteUntrackedFile",
-          "when": "scmProvider == jj && scmResourceGroup == untracked && jj.jjBinaryFound",
+          "command": "juju.deleteUntrackedFile",
+          "when": "scmProvider == juju && scmResourceGroup == untracked && juju.jjBinaryFound",
           "group": "inline@2"
         }
       ],
       "scm/resourceFolder/context": [
         {
-          "command": "jj.restoreResourceState",
-          "when": "scmProvider == jj && scmResourceGroup != selected && scmResourceGroup != untracked && jj.jjBinaryFound",
+          "command": "juju.restoreResourceState",
+          "when": "scmProvider == juju && scmResourceGroup != selected && scmResourceGroup != untracked && juju.jjBinaryFound",
           "group": "inline@4"
         },
         {
-          "command": "jj.squashToParentResourceState",
-          "when": "scmProvider == jj && scmResourceGroup == @ && jj.jjBinaryFound",
+          "command": "juju.squashToParentResourceState",
+          "when": "scmProvider == juju && scmResourceGroup == @ && juju.jjBinaryFound",
           "group": "inline@5"
         },
         {
-          "command": "jj.squashToWorkingCopyResourceState",
-          "when": "scmProvider == jj && scmResourceGroup != @ && scmResourceGroup != selected && scmResourceGroup != untracked && jj.jjBinaryFound",
+          "command": "juju.squashToWorkingCopyResourceState",
+          "when": "scmProvider == juju && scmResourceGroup != @ && scmResourceGroup != selected && scmResourceGroup != untracked && juju.jjBinaryFound",
           "group": "inline@5"
         }
       ],
       "commandPalette": [
         {
-          "command": "jj.graphFetchSubmenu.fetchAllRemotes",
+          "command": "juju.graphFetchSubmenu.fetchAllRemotes",
           "when": "false"
         },
         {
-          "command": "jj.graphFetchSubmenu.fetchFromRemote",
+          "command": "juju.graphFetchSubmenu.fetchFromRemote",
           "when": "false"
         },
         {
-          "command": "jj.graphFetchSubmenu.pushToRemote",
+          "command": "juju.graphFetchSubmenu.pushToRemote",
           "when": "false"
         },
         {
-          "command": "jj.graphFetchSubmenu.syncing",
+          "command": "juju.graphFetchSubmenu.syncing",
           "when": "false"
         },
         {
-          "command": "jj.openFileResourceState",
+          "command": "juju.openFileResourceState",
           "when": "false"
         },
         {
-          "command": "jj.openFileAtRevision",
+          "command": "juju.openFileAtRevision",
           "when": "false"
         },
         {
-          "command": "jj.openFileInWorkingCopyEditor",
+          "command": "juju.openFileInWorkingCopyEditor",
           "when": "false"
         },
         {
-          "command": "jj.openFileInWorkingCopyResourceState",
+          "command": "juju.openFileInWorkingCopyResourceState",
           "when": "false"
         },
         {
-          "command": "jj.openDiffResourceState",
+          "command": "juju.openDiffResourceState",
           "when": "false"
         },
         {
-          "command": "jj.describe",
+          "command": "juju.describe",
           "when": "false"
         },
         {
-          "command": "jj.squashToParentResourceGroup",
+          "command": "juju.squashToParentResourceGroup",
           "when": "false"
         },
         {
-          "command": "jj.squashToWorkingCopyResourceGroup",
+          "command": "juju.squashToWorkingCopyResourceGroup",
           "when": "false"
         },
         {
-          "command": "jj.squashToParentResourceState",
+          "command": "juju.squashToParentResourceState",
           "when": "false"
         },
         {
-          "command": "jj.squashToWorkingCopyResourceState",
+          "command": "juju.squashToWorkingCopyResourceState",
           "when": "false"
         },
         {
-          "command": "jj.editResourceGroup",
+          "command": "juju.editResourceGroup",
           "when": "false"
         },
         {
-          "command": "jj.viewInterdiff",
+          "command": "juju.viewInterdiff",
           "when": "false"
         },
         {
-          "command": "jj.viewRegularDiff",
+          "command": "juju.viewRegularDiff",
           "when": "false"
         },
         {
-          "command": "jj.restoreResourceState",
+          "command": "juju.restoreResourceState",
           "when": "false"
         },
         {
-          "command": "jj.restoreResourceGroup",
+          "command": "juju.restoreResourceGroup",
           "when": "false"
         },
         {
-          "command": "jj.selectOperationLogRepo",
+          "command": "juju.selectOperationLogRepo",
           "when": "false"
         },
         {
-          "command": "jj.operationRevert",
+          "command": "juju.operationRevert",
           "when": "false"
         },
         {
-          "command": "jj.operationRestore",
+          "command": "juju.operationRestore",
           "when": "false"
         },
         {
-          "command": "jj.selectGraphWebviewRepo",
+          "command": "juju.selectGraphWebviewRepo",
           "when": "false"
         },
         {
-          "command": "jj.openDetailsWebview",
+          "command": "juju.openDetailsWebview",
           "when": "false"
         },
         {
-          "command": "jj.openGraphInTab",
-          "when": "jj.reposExist"
+          "command": "juju.openGraphInTab",
+          "when": "juju.reposExist"
         },
         {
-          "command": "jj.placeholderForFolders",
+          "command": "juju.placeholderForFolders",
           "when": "false"
         },
         {
-          "command": "jj.openParentChange",
+          "command": "juju.openParentChange",
           "when": "false"
         },
         {
-          "command": "jj.openChildChange",
+          "command": "juju.openChildChange",
           "when": "false"
         },
         {
-          "command": "jj.copyPath",
+          "command": "juju.copyPath",
           "when": "false"
         },
         {
-          "command": "jj.copyRelativePath",
+          "command": "juju.copyRelativePath",
           "when": "false"
         },
         {
-          "command": "jj.trackUntrackedFile",
+          "command": "juju.trackUntrackedFile",
           "when": "false"
         },
         {
-          "command": "jj.deleteUntrackedFile",
+          "command": "juju.deleteUntrackedFile",
           "when": "false"
         },
         {
-          "command": "jj.trackAllUntrackedFiles",
+          "command": "juju.trackAllUntrackedFiles",
           "when": "false"
         },
         {
-          "command": "jj.deleteAllUntrackedFiles",
+          "command": "juju.deleteAllUntrackedFiles",
           "when": "false"
         }
       ]
     },
     "keybindings": [
       {
-        "command": "jj.newWithEditor",
+        "command": "juju.newWithEditor",
         "key": "ctrl+shift+enter",
         "mac": "cmd+shift+enter",
         "when": "scmRepository"
@@ -1031,7 +1031,7 @@
     },
     "colors": [
       {
-        "id": "jjDecoration.addedResourceForeground",
+        "id": "jujuDecoration.addedResourceForeground",
         "description": "%colors.added%",
         "defaults": {
           "light": "#587c0c",
@@ -1041,7 +1041,7 @@
         }
       },
       {
-        "id": "jjDecoration.modifiedResourceForeground",
+        "id": "jujuDecoration.modifiedResourceForeground",
         "description": "%colors.modified%",
         "defaults": {
           "light": "#895503",
@@ -1051,7 +1051,7 @@
         }
       },
       {
-        "id": "jjDecoration.deletedResourceForeground",
+        "id": "jujuDecoration.deletedResourceForeground",
         "description": "%colors.deleted%",
         "defaults": {
           "light": "#ad0707",
@@ -1061,7 +1061,7 @@
         }
       },
       {
-        "id": "jjDecoration.renamedResourceForeground",
+        "id": "jujuDecoration.renamedResourceForeground",
         "description": "%colors.renamed%",
         "defaults": {
           "light": "#007100",
@@ -1071,7 +1071,7 @@
         }
       },
       {
-        "id": "jjDecoration.untrackedResourceForeground",
+        "id": "jujuDecoration.untrackedResourceForeground",
         "description": "%colors.untracked%",
         "defaults": {
           "light": "#6E6E70",
@@ -1081,7 +1081,7 @@
         }
       },
       {
-        "id": "jjDecoration.ignoredResourceForeground",
+        "id": "jujuDecoration.ignoredResourceForeground",
         "description": "%colors.ignored%",
         "defaults": {
           "light": "#8E8E90",
@@ -1091,7 +1091,7 @@
         }
       },
       {
-        "id": "jjDecoration.stageModifiedResourceForeground",
+        "id": "jujuDecoration.stageModifiedResourceForeground",
         "description": "%colors.stageModified%",
         "defaults": {
           "light": "#895503",
@@ -1101,7 +1101,7 @@
         }
       },
       {
-        "id": "jjDecoration.stageDeletedResourceForeground",
+        "id": "jujuDecoration.stageDeletedResourceForeground",
         "description": "%colors.stageDeleted%",
         "defaults": {
           "light": "#ad0707",
@@ -1111,7 +1111,7 @@
         }
       },
       {
-        "id": "jjDecoration.conflictingResourceForeground",
+        "id": "jujuDecoration.conflictingResourceForeground",
         "description": "%colors.conflict%",
         "defaults": {
           "light": "#ad0707",
@@ -1121,7 +1121,7 @@
         }
       },
       {
-        "id": "jjDecoration.submoduleResourceForeground",
+        "id": "jujuDecoration.submoduleResourceForeground",
         "description": "%colors.submodule%",
         "defaults": {
           "light": "#1258a7",
@@ -1131,7 +1131,7 @@
         }
       },
       {
-        "id": "jj.blame.editorDecorationForeground",
+        "id": "juju.blame.editorDecorationForeground",
         "description": "%colors.blameEditorDecoration%",
         "defaults": {
           "dark": "editorCodeLens.foreground",

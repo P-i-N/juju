@@ -107,8 +107,8 @@ export class JJFileSystemProvider implements FileSystemProvider {
 
     for (const row of this.cache.values()) {
       const uriString = row.uri.toString();
-      // Cache entries are keyed by their full `jj://` URI, and an open diff
-      // editor's document is itself a `jj://` URI, so keep a row alive when an
+      // Cache entries are keyed by their full `juju://` URI, and an open diff
+      // editor's document is itself a `juju://` URI, so keep a row alive when an
       // open document matches it (regardless of scheme).
       const isOpen = workspace.textDocuments.some((d) => d.uri.toString() === uriString);
 

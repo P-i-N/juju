@@ -157,11 +157,11 @@ body {
 }
 
 .detailsAdded {
-  color: var(--vscode-jjDecoration-addedResourceForeground, var(--vscode-gitDecoration-addedResourceForeground));
+  color: var(--vscode-jujuDecoration-addedResourceForeground, var(--vscode-gitDecoration-addedResourceForeground));
 }
 
 .detailsRemoved {
-  color: var(--vscode-jjDecoration-deletedResourceForeground, var(--vscode-gitDecoration-deletedResourceForeground));
+  color: var(--vscode-jujuDecoration-deletedResourceForeground, var(--vscode-gitDecoration-deletedResourceForeground));
 }
 
 .detailsChangedFilesSection {
@@ -207,25 +207,28 @@ body {
 
 .detailsChangedFile[data-status="a"],
 .detailsChangedFile[data-status="c"] {
-  color: var(--vscode-jjDecoration-addedResourceForeground, var(--vscode-gitDecoration-addedResourceForeground));
+  color: var(--vscode-jujuDecoration-addedResourceForeground, var(--vscode-gitDecoration-addedResourceForeground));
 }
 
 .detailsChangedFile[data-status="m"] {
-  color: var(--vscode-jjDecoration-modifiedResourceForeground, var(--vscode-gitDecoration-modifiedResourceForeground));
+  color: var(
+    --vscode-jujuDecoration-modifiedResourceForeground,
+    var(--vscode-gitDecoration-modifiedResourceForeground)
+  );
 }
 
 .detailsChangedFile[data-status="d"] {
-  color: var(--vscode-jjDecoration-deletedResourceForeground, var(--vscode-gitDecoration-deletedResourceForeground));
+  color: var(--vscode-jujuDecoration-deletedResourceForeground, var(--vscode-gitDecoration-deletedResourceForeground));
 }
 
 .detailsChangedFile[data-status="r"] {
-  color: var(--vscode-jjDecoration-renamedResourceForeground, var(--vscode-gitDecoration-renamedResourceForeground));
+  color: var(--vscode-jujuDecoration-renamedResourceForeground, var(--vscode-gitDecoration-renamedResourceForeground));
 }
 
 .detailsChangedFile[data-status="x"],
 .detailsChangedFile[data-conflict] {
   color: var(
-    --vscode-jjDecoration-conflictingResourceForeground,
+    --vscode-jujuDecoration-conflictingResourceForeground,
     var(--vscode-gitDecoration-conflictingResourceForeground)
   );
 }
@@ -252,11 +255,11 @@ body {
 }
 
 .detailsFileDetail.detailsAdded {
-  color: var(--vscode-jjDecoration-addedResourceForeground, var(--vscode-gitDecoration-addedResourceForeground));
+  color: var(--vscode-jujuDecoration-addedResourceForeground, var(--vscode-gitDecoration-addedResourceForeground));
 }
 
 .detailsFileDetail.detailsRemoved {
-  color: var(--vscode-jjDecoration-deletedResourceForeground, var(--vscode-gitDecoration-deletedResourceForeground));
+  color: var(--vscode-jujuDecoration-deletedResourceForeground, var(--vscode-gitDecoration-deletedResourceForeground));
 }
 
 .detailsContextMenu {

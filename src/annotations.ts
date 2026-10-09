@@ -87,7 +87,7 @@ export function registerAnnotations(state: ExtensionState): void {
     }
   };
   const updateAnnotateInfo = async (uri: vscode.Uri) => {
-    if (!["file", "jj"].includes(uri.scheme)) {
+    if (!["file", "juju"].includes(uri.scheme)) {
       annotateInfo = undefined;
       return;
     }

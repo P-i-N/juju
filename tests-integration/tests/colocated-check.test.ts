@@ -6,8 +6,8 @@ import * as path from "path";
 // `colocatedCheck.ts` warns when a repository root contains BOTH a `.jj` and a
 // `.git` directory and the built-in Git extension is enabled. The warning has
 // two surfaces:
-//   - a persistent status bar item (`$(warning) jjx issues (N)`) whose command
-//     (`jj.showColocatedWarnings`) re-shows the warning, and
+//   - a persistent status bar item (`$(warning) Juju issues (N)`) whose command
+//     (`juju.showColocatedWarnings`) re-shows the warning, and
 //   - a `showWarningMessage` toast offering two actions, "Open Global Settings"
 //     and "Open Folder Settings".
 // There is no persistent "don't show again" state.
@@ -34,7 +34,7 @@ colocatedTest(
   "warns about a colocated jj/git repository with Open Global Settings and Open Folder Settings actions",
   async ({ workbox }) => {
     // The persistent status bar item is the reliable signal that detection ran.
-    const statusItem = workbox.locator(".statusbar-item", { hasText: /jjx issues/ });
+    const statusItem = workbox.locator(".statusbar-item", { hasText: /Juju issues/ });
     await expect(statusItem).toBeVisible();
 
     // Re-trigger the warning toast via the status bar item's command so the toast
@@ -78,7 +78,7 @@ nonColocatedTest("does not warn for a non-colocated jj repository", async ({ gra
 
   // The status bar item persists once shown, so its absence reliably proves no
   // colocated warning was registered.
-  await expect(workbox.locator(".statusbar-item", { hasText: /jjx issues/ })).toBeHidden();
+  await expect(workbox.locator(".statusbar-item", { hasText: /Juju issues/ })).toBeHidden();
   await expect(
     workbox.locator(".notifications-toasts .notification-list-item", {
       hasText: /Colocated Jujutsu and Git repository detected/,

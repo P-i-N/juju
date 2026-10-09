@@ -65,7 +65,7 @@ async function checkJJVersion(jjFilepath: string): Promise<JJVersion | undefined
         (version.major === MINIMUM_JJ_VERSION.major && version.minor < MINIMUM_JJ_VERSION.minor)
       ) {
         void vscode.window.showErrorMessage(
-          `Jujutsu X requires jj version ${MINIMUM_JJ_VERSION.major}.${MINIMUM_JJ_VERSION.minor}.${MINIMUM_JJ_VERSION.patch} or later. It may work incorrectly with the currently installed version: ${version.major}.${version.minor}.${version.patch}.`,
+          `Juju requires jj version ${MINIMUM_JJ_VERSION.major}.${MINIMUM_JJ_VERSION.minor}.${MINIMUM_JJ_VERSION.patch} or later. It may work incorrectly with the currently installed version: ${version.major}.${version.minor}.${version.patch}.`,
         );
       }
     }
@@ -111,7 +111,7 @@ export class WorkspaceSourceControlManager {
     this.fileSystemProvider = new JJFileSystemProvider(this);
     this.subscriptions.push(this.fileSystemProvider);
     this.subscriptions.push(
-      vscode.workspace.registerFileSystemProvider("jj", this.fileSystemProvider, {
+      vscode.workspace.registerFileSystemProvider("juju", this.fileSystemProvider, {
         isReadonly: true,
         isCaseSensitive: true,
       }),
@@ -127,7 +127,7 @@ export class WorkspaceSourceControlManager {
       return;
     }
     const rootUri = workspaceFolders[0].uri;
-    this.errorSourceControl = vscode.scm.createSourceControl("jj", "Jujutsu", rootUri);
+    this.errorSourceControl = vscode.scm.createSourceControl("juju", "Jujutsu", rootUri);
     this.errorSourceControl.inputBox.placeholder = placeholder;
     this.errorResourceGroup = this.errorSourceControl.createResourceGroup("error", label);
   }
@@ -211,7 +211,7 @@ export class WorkspaceSourceControlManager {
           ) {
             anyBinaryNotFound = true;
           }
-          logger.error(`Error while initializing jjx in workspace ${workspaceFolder.uri.fsPath}: ${String(e)}`);
+          logger.error(`Error while initializing Juju in workspace ${workspaceFolder.uri.fsPath}: ${String(e)}`);
         }
         continue;
       }
@@ -271,7 +271,7 @@ export class WorkspaceSourceControlManager {
         break;
       }
       const { repoRoot, jjPath, jjConfigArgs, jjVersion } = newRepoInfos.get(key)!;
-      logger.info(`Initializing jjx in workspace ${key}. Using jj at ${jjPath.filepath} (${jjPath.source}).`);
+      logger.info(`Initializing Juju in workspace ${key}. Using jj at ${jjPath.filepath} (${jjPath.source}).`);
       const repoSCM = new RepositorySourceControlManager(
         repoRoot,
         this.decorationProvider,
@@ -292,23 +292,23 @@ export class WorkspaceSourceControlManager {
       updatedRepoSCMs.push(repoSCM);
     }
     this.repoSCMs = updatedRepoSCMs;
-    void vscode.commands.executeCommand("setContext", "jj.hasMultipleRepos", updatedRepoSCMs.length > 1);
+    void vscode.commands.executeCommand("setContext", "juju.hasMultipleRepos", updatedRepoSCMs.length > 1);
 
     if (updatedRepoSCMs.length > 0) {
       this.clearErrorState();
       this.jjBinaryNotFound = false;
       this.noRepoFound = false;
-      void vscode.commands.executeCommand("setContext", "jj.jjBinaryFound", true);
+      void vscode.commands.executeCommand("setContext", "juju.jjBinaryFound", true);
     } else if (anyBinaryNotFound) {
       this.jjBinaryNotFound = true;
       this.noRepoFound = false;
       this.showErrorState("Waiting for jj binary...", "Error: jj binary not found");
-      void vscode.commands.executeCommand("setContext", "jj.jjBinaryFound", false);
+      void vscode.commands.executeCommand("setContext", "juju.jjBinaryFound", false);
     } else {
       this.jjBinaryNotFound = false;
       this.noRepoFound = true;
       this.showErrorState("No Repository Found", "No jj repository found");
-      void vscode.commands.executeCommand("setContext", "jj.jjBinaryFound", true);
+      void vscode.commands.executeCommand("setContext", "juju.jjBinaryFound", true);
     }
 
     return isAnyRepoChanged;
@@ -410,7 +410,7 @@ export class WorkspaceSourceControlManager {
 }
 
 export function provideOriginalResource(uri: vscode.Uri) {
-  if (!["file", "jj"].includes(uri.scheme)) {
+  if (!["file", "juju"].includes(uri.scheme)) {
     return undefined;
   }
 
@@ -484,7 +484,7 @@ class RepositorySourceControlManager {
   ) {
     this.repository = new JJRepository(repositoryRoot, jjPath, jjConfigArgs, jjVersion);
 
-    this.sourceControl = vscode.scm.createSourceControl("jj", "Jujutsu", vscode.Uri.file(repositoryRoot));
+    this.sourceControl = vscode.scm.createSourceControl("juju", "Jujutsu", vscode.Uri.file(repositoryRoot));
     this.subscriptions.push(this.sourceControl);
 
     this.workingCopyResourceGroup = this.sourceControl.createResourceGroup("@", "Working Copy");
@@ -501,7 +501,7 @@ class RepositorySourceControlManager {
     this.updatePlaceholderText();
 
     this.sourceControl.acceptInputCommand = {
-      command: "jj.new",
+      command: "juju.new",
       title: "Create New Change",
       arguments: [this.sourceControl],
     };
@@ -1157,7 +1157,7 @@ function getResourceStateCommand(
   if (changeId === undefined || isWorkingCopyConflicted) {
     return {
       title: isConflicted || isWorkingCopyConflicted ? "Resolve Conflict" : fallback.title,
-      command: "jj.openWorkingCopyFile",
+      command: "juju.openWorkingCopyFile",
       arguments: [workingCopyUri, { command: fallback.command, args: fallback.arguments ?? [] }],
     };
   }

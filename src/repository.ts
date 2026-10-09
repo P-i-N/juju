@@ -339,7 +339,7 @@ export class JJRepository {
 
   /**
    * Randomized delay used before re-checking or reconciling divergent operation heads. The
-   * randomization breaks the phase-lock between multiple jjx instances sharing one repository, so
+   * randomization breaks the phase-lock between multiple Juju instances sharing one repository, so
    * their reconciliations cannot sustain a cascade. Resolves early if the token is cancelled.
    */
   private jitteredDelay(maxDelayMs: number, token?: vscode.CancellationToken): Promise<void> {
@@ -2152,7 +2152,7 @@ export class JJRepository {
   /**
    * Returns whether the working copy does not change `filepath` relative to `changeId`: the
    * file content is identical in `changeId` and the working-copy commit (`@`), and `changeId` is
-   * an ancestor of `@`. Diff-open paths use this to swap a read-only `jj://` right side for the
+   * an ancestor of `@`. Diff-open paths use this to swap a read-only `juju://` right side for the
    * real (editable) working-copy file, which is content-identical in that case.
    */
   async isFileUnchangedInWorkingCopy(changeId: FullChangeId, filepath: string): Promise<boolean> {

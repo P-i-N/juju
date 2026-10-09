@@ -20,19 +20,19 @@ export function diffKey(from: ChangeId, to: ChangeId): string {
 const colorOfType = (type: FileStatusType) => {
   switch (type) {
     case "A":
-      return new ThemeColor("jjDecoration.addedResourceForeground");
+      return new ThemeColor("jujuDecoration.addedResourceForeground");
     case "M":
-      return new ThemeColor("jjDecoration.modifiedResourceForeground");
+      return new ThemeColor("jujuDecoration.modifiedResourceForeground");
     case "D":
-      return new ThemeColor("jjDecoration.deletedResourceForeground");
+      return new ThemeColor("jujuDecoration.deletedResourceForeground");
     case "R":
-      return new ThemeColor("jjDecoration.renamedResourceForeground");
+      return new ThemeColor("jujuDecoration.renamedResourceForeground");
     case "C":
-      return new ThemeColor("jjDecoration.addedResourceForeground");
+      return new ThemeColor("jujuDecoration.addedResourceForeground");
     case "X":
-      return new ThemeColor("jjDecoration.conflictingResourceForeground");
+      return new ThemeColor("jujuDecoration.conflictingResourceForeground");
     case "?":
-      return new ThemeColor("jjDecoration.untrackedResourceForeground");
+      return new ThemeColor("jujuDecoration.untrackedResourceForeground");
   }
 };
 
@@ -104,13 +104,13 @@ export class JJDecorationProvider implements FileDecorationProvider {
           newKeys.add(key);
           this.decorations.set(key, {
             badge: "!",
-            color: new ThemeColor("jjDecoration.conflictingResourceForeground"),
+            color: new ThemeColor("jujuDecoration.conflictingResourceForeground"),
           });
         } else {
           this.decorations.set(key, {
             ...existingDecoration,
             badge: `${existingDecoration.badge}!`,
-            color: new ThemeColor("jjDecoration.conflictingResourceForeground"),
+            color: new ThemeColor("jujuDecoration.conflictingResourceForeground"),
           });
         }
       }
@@ -197,12 +197,12 @@ export class JJDecorationProvider implements FileDecorationProvider {
     // Decorations are keyed by resolved repository paths, while URIs from VS Code (and from
     // resource states built for the SCM view) may use the workspace folder's path spelling.
     const fsPath = toRealPathSpelling(uri.fsPath);
-    if (uri.scheme === "jj") {
+    if (uri.scheme === "juju") {
       let params: JJUriParams;
       try {
         params = getParams(uri);
       } catch {
-        // Stray or serialized jj: URIs (e.g. from stale state, logs, or
+        // Stray or serialized juju: URIs (e.g. from stale state, logs, or
         // another extension) may have an empty or malformed query. Return
         // undefined instead of surfacing an error from the decoration provider.
         return undefined;
@@ -222,7 +222,7 @@ export class JJDecorationProvider implements FileDecorationProvider {
     if (rev === "@" && !this.decorations.has(key)) {
       if (!this.trackedFiles.has(normalizePath(fsPath))) {
         return {
-          color: new ThemeColor("jjDecoration.ignoredResourceForeground"),
+          color: new ThemeColor("jujuDecoration.ignoredResourceForeground"),
         };
       }
     }

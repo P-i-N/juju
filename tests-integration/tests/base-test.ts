@@ -545,15 +545,15 @@ async function collectLogFiles(root: string): Promise<string[]> {
 }
 
 // Returns true if a log file (by path relative to the session dir) is the
-// "Jujutsu X" extension's output channel log.
-function isJujutsuXChannelLog(relPath: string): boolean {
+// "Juju" extension's output channel log.
+function isJujuChannelLog(relPath: string): boolean {
   const normalized = relPath.split(path.sep).join("/");
-  return /jjx\.jjx\//.test(normalized) || /Jujutsu X/i.test(normalized);
+  return /(^|\/)juju\.juju\//.test(normalized) || /(^|\/)Juju\.log$/.test(normalized);
 }
 
-// Reads VS Code's on-disk "Jujutsu X" output channel log and surfaces it after a
+// Reads VS Code's on-disk "Juju" output channel log and surfaces it after a
 // failing test. VS Code writes the channel to
-// `<userDataDir>/logs/<session>/window*/exthost/jjx.jjx/Jujutsu X.log`. VS Code
+// `<userDataDir>/logs/<session>/window*/exthost/juju.juju/Juju.log`. VS Code
 // is launched with `--log=trace`, so logger.trace()/debug() lines are captured.
 async function dumpExtensionLogs(userDataDir: string, testInfo: TestInfo): Promise<void> {
   const logsRoot = path.join(userDataDir, "logs");
@@ -563,7 +563,7 @@ async function dumpExtensionLogs(userDataDir: string, testInfo: TestInfo): Promi
   }
 
   const channelLogs = (await collectLogFiles(sessionDir))
-    .filter((f) => isJujutsuXChannelLog(path.relative(sessionDir, f)))
+    .filter((f) => isJujuChannelLog(path.relative(sessionDir, f)))
     .sort();
   if (channelLogs.length === 0) {
     return;
@@ -571,7 +571,7 @@ async function dumpExtensionLogs(userDataDir: string, testInfo: TestInfo): Promi
 
   const sections: string[] = [];
   sections.push(
-    `\n========== Jujutsu X output channel logs (test: ${testInfo.title}, status: ${testInfo.status}) ==========`,
+    `\n========== Juju output channel logs (test: ${testInfo.title}, status: ${testInfo.status}) ==========`,
   );
 
   for (const file of channelLogs) {
@@ -583,5 +583,5 @@ async function dumpExtensionLogs(userDataDir: string, testInfo: TestInfo): Promi
 
   const combined = sections.join("\n\n");
   console.log(combined);
-  await testInfo.attach("jjx-output-channel", { body: combined, contentType: "text/plain" });
+  await testInfo.attach("juju-output-channel", { body: combined, contentType: "text/plain" });
 }

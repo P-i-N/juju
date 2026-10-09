@@ -49,9 +49,9 @@ export async function registerColocatedCheck(
 
     if (reposWithWarnings.size > 0) {
       const count = reposWithWarnings.size;
-      statusBarItem.text = `$(warning) jjx issues (${count})`;
+      statusBarItem.text = `$(warning) Juju issues (${count})`;
       statusBarItem.tooltip = "Click to View Colocated Repository Warnings";
-      statusBarItem.command = "jj.showColocatedWarnings";
+      statusBarItem.command = "juju.showColocatedWarnings";
       statusBarItem.show();
     } else {
       statusBarItem.hide();
@@ -65,16 +65,16 @@ export async function registerColocatedCheck(
 
       vscode.window.showWarningMessage(message, openGlobalSettings, openFolderSettings).then((selection) => {
         if (selection === openGlobalSettings) {
-          vscode.commands.executeCommand("jj.openGlobalGitSettings");
+          vscode.commands.executeCommand("juju.openGlobalGitSettings");
         } else if (selection === openFolderSettings) {
-          vscode.commands.executeCommand("jj.openFolderGitSettings", repoRoot);
+          vscode.commands.executeCommand("juju.openFolderGitSettings", repoRoot);
         }
       });
     }
   };
 
   context.subscriptions.push(
-    vscode.commands.registerCommand("jj.showColocatedWarnings", () => {
+    vscode.commands.registerCommand("juju.showColocatedWarnings", () => {
       for (const repoRoot of reposWithWarnings) {
         const folderName = path.basename(repoRoot);
         const message = `Colocated Jujutsu and Git repository detected in "${folderName}". Consider disabling the Git extension to avoid conflicts.`;
@@ -83,9 +83,9 @@ export async function registerColocatedCheck(
 
         vscode.window.showWarningMessage(message, openGlobalSettings, openFolderSettings).then((selection) => {
           if (selection === openGlobalSettings) {
-            vscode.commands.executeCommand("jj.openGlobalGitSettings");
+            vscode.commands.executeCommand("juju.openGlobalGitSettings");
           } else if (selection === openFolderSettings) {
-            vscode.commands.executeCommand("jj.openFolderGitSettings", repoRoot);
+            vscode.commands.executeCommand("juju.openFolderGitSettings", repoRoot);
           }
         });
       }
@@ -93,7 +93,7 @@ export async function registerColocatedCheck(
   );
 
   context.subscriptions.push(
-    vscode.commands.registerCommand("jj.checkColocatedRepos", async () => {
+    vscode.commands.registerCommand("juju.checkColocatedRepos", async () => {
       await checkRepos();
     }),
   );
