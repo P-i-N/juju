@@ -33,8 +33,11 @@ async function openGraphTabAndFocus(workbox: Page, knownFrames: Frame[]): Promis
     expect(frames).toHaveLength(1);
     tabFrame = frames[0];
   }).toPass();
-  // Keyboard shortcuts only reach the workbench once the webview has been clicked.
-  await tabFrame!.locator("body").click();
+  // Ctrl+Shift+P does not reach the workbench until the new webview has been clicked. Click its bottom-right
+  // corner, far below the few graph rows, so that no row is selected.
+  const box = await (await tabFrame!.frameElement()).boundingBox();
+  expect(box).not.toBeNull();
+  await workbox.mouse.click(box!.x + box!.width - 10, box!.y + box!.height - 10);
   return tabFrame!;
 }
 
@@ -48,6 +51,10 @@ export async function openTwoGraphTabsSideBySide(workbox: Page, sidebarFrame: Fr
     expect(await hasGraphRows(firstTab)).toBe(true);
     expect(await hasGraphRows(secondTab)).toBe(true);
   }).toPass();
+
+  for (const frame of [sidebarFrame, firstTab, secondTab]) {
+    await expect(frame.locator("#nodes > div[data-selected]")).toHaveCount(0);
+  }
 
   return [firstTab, secondTab];
 }
