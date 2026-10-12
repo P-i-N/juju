@@ -108,7 +108,7 @@ export type WebviewToExtensionMessage =
   | { command: "moveFileChanges"; fromChangeId: FullChangeId; toChangeId: FullChangeId; paths: string[] }
   | { command: "discardFileChanges"; changeId: FullChangeId; files: { path: string; renamedFrom?: string }[] }
   | {
-      command: "moveFileChangesToNewChange";
+      command: "moveFileChangesToNewChange" | "copyFileChangesToNewChange";
       fromChangeId: FullChangeId;
       targetChangeId: FullChangeId;
       position: "onto" | "after" | "before";

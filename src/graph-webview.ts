@@ -726,6 +726,16 @@ export class JJGraphWebview implements vscode.WebviewViewProvider {
         );
         break;
       }
+      case "copyFileChangesToNewChange":
+        await this.withRefresh("copy file changes to a new change", () =>
+          repo.copyFileChangesToNewChangeRetryImmutable(
+            message.fromChangeId,
+            message.targetChangeId,
+            message.position,
+            message.paths.map((p) => joinRepositoryPath(repo.repositoryRoot, p)),
+          ),
+        );
+        break;
       case "moveFileChangesToNewChange":
         await this.withRefresh("move file changes to a new change", async () => {
           const newChangeId = await repo.newAtNoEditRetryImmutable(message.targetChangeId, message.position);

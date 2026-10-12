@@ -1,6 +1,6 @@
 import { computed, signal } from "@preact/signals";
 import type { VSCodeAPI } from "./types";
-import { computeEdgeHighlight, type HoveredEdge } from "./insert-edges";
+import { computeEdgeHighlight, type DropPosition, type EdgeHighlight, type HoveredEdge } from "./insert-edges";
 import type { FileSelection } from "./file-selection";
 import { DEFAULT_CHANGE_DOUBLE_CLICK_ACTION } from "../../double-click-action";
 import type {
@@ -60,6 +60,11 @@ export const dragSourceIds = computed<FullChangeId[]>(() => {
   return selection.size > 1 && selection.has(start) ? [start, ...[...selection].filter((id) => id !== start)] : [start];
 });
 export const edgeHighlight = computed(() => {
+  // The edge a drop landed on stays highlighted while its menu is open.
+  const menu = edgeDropMenu.value;
+  if (menu) {
+    return menu.highlight;
+  }
   const edge = hoveredEdge.value;
   if (!edge || !insertModifierHeld.value || dragBookmarkName.value) {
     return null;
@@ -222,10 +227,21 @@ export function clearAllTooltipTimers() {
   }
 }
 
+export type EdgeDropMenuState = {
+  targetId: FullChangeId;
+  position: DropPosition;
+  highlight: EdgeHighlight;
+  clientX: number;
+  clientY: number;
+} & ({ kind: "changes"; sourceIds: FullChangeId[] } | { kind: "files"; fromChangeId: FullChangeId; paths: string[] });
+
+export const edgeDropMenu = signal<EdgeDropMenuState | null>(null);
+
 export function isAnyMenuOpen(): boolean {
   return (
     contextMenu.value !== null ||
     rebaseMenu.value !== null ||
+    edgeDropMenu.value !== null ||
     pillContextMenu.value !== null ||
     remoteRefContextMenu.value !== null ||
     fileContextMenu.value !== null
@@ -235,6 +251,7 @@ export function isAnyMenuOpen(): boolean {
 export function closeAllMenus() {
   contextMenu.value = null;
   rebaseMenu.value = null;
+  edgeDropMenu.value = null;
   pillContextMenu.value = null;
   remoteRefContextMenu.value = null;
   fileContextMenu.value = null;

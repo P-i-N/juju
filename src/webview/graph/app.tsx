@@ -36,6 +36,7 @@ import {
 import { Graph } from "./components/graph";
 import { ContextMenu } from "./components/context-menu";
 import { RebaseMenu } from "./components/rebase-menu";
+import { EdgeDropMenu } from "./components/edge-drop-menu";
 import { PillContextMenu } from "./components/pill-context-menu";
 import { RemoteRefContextMenu } from "./components/remote-ref-context-menu";
 import { FileContextMenu } from "./components/file-context-menu";
@@ -296,6 +297,7 @@ export function App() {
       )}
       <ContextMenu />
       <RebaseMenu />
+      <EdgeDropMenu />
       <PillContextMenu />
       <RemoteRefContextMenu />
       <FileContextMenu />

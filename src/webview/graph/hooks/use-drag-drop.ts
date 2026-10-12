@@ -12,7 +12,8 @@ import {
   selectedNodes,
   hoveredEdge,
   dragSourceIds,
-  clearAllTooltipTimers,
+  edgeDropMenu,
+  edgeHighlight,
 } from "../signals";
 import { clearHoveredEdge, edgeDropAt, updateHoveredEdge, type EdgeZones } from "../edge-hover";
 import { createTooltipTimers } from "./tooltip-timers";
@@ -22,21 +23,24 @@ import changeNodeStyles from "../components/change-node.module.css";
 import dragGhostStyles from "../components/drag-ghost.module.css";
 
 /**
- * Performs a Ctrl+drop of the dragged changes or changed file on the change's
- * edge under the pointer. Returns whether the drop landed on an edge.
+ * Handles a Ctrl+drop of the dragged changes or changed files on the change's
+ * edge under the pointer by opening the edge drop menu. Returns whether the
+ * drop landed on an edge.
  */
 export function dropOnEdge(change: ChangeNode, e: DragEvent, zones: EdgeZones = "both"): boolean {
   if (change.branchType === "~" || dragBookmarkName.value) {
     return false;
   }
   const position = edgeDropAt(change, e, zones);
-  if (!position) {
+  const highlight = edgeHighlight.value;
+  if (!position || !highlight) {
     return false;
   }
   const files = dragFiles.value;
   const sourceIds = dragSourceIds.value;
-  clearAllTooltipTimers();
-  tooltip.value = null;
+  if (!files && sourceIds.length === 0) {
+    return false;
+  }
   isDragging.value = false;
   dragFiles.value = null;
   dropTargetId.value = null;
@@ -44,22 +48,11 @@ export function dropOnEdge(change: ChangeNode, e: DragEvent, zones: EdgeZones = 
   setTimeout(() => {
     justFinishedDrag.value = false;
   }, 100);
-  if (files) {
-    postMessage({
-      command: "moveFileChangesToNewChange",
-      fromChangeId: files.changeId,
-      targetChangeId: change.id.changeId,
-      position,
-      paths: files.paths,
-    });
-  } else if (sourceIds.length > 0) {
-    postMessage({
-      command: position === "onto" ? "rebaseOnto" : position === "after" ? "rebaseAfter" : "rebaseBefore",
-      changeIds: sourceIds,
-      targetChangeId: change.id.changeId,
-      withDescendants: false,
-    });
-  }
+  closeAllMenus();
+  const common = { targetId: change.id.changeId, position, highlight, clientX: e.clientX, clientY: e.clientY };
+  edgeDropMenu.value = files
+    ? { ...common, kind: "files", fromChangeId: files.changeId, paths: files.paths }
+    : { ...common, kind: "changes", sourceIds };
   return true;
 }
 

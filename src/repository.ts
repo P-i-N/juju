@@ -740,14 +740,11 @@ export class JJRepository {
   }
 
   private async neighborChangeIds(rev: FullChangeId): Promise<Set<string>> {
-    const output = await this.jjCommandRead([
-      "log",
-      "-r",
-      `${rev}- | ${rev}+`,
-      "--no-graph",
-      "-T",
-      'change_id ++ "\\n"',
-    ]);
+    return this.changeIdsIn(`${rev}- | ${rev}+`);
+  }
+
+  private async changeIdsIn(revset: string): Promise<Set<string>> {
+    const output = await this.jjCommandRead(["log", "-r", revset, "--no-graph", "-T", 'change_id ++ "\\n"']);
     return new Set(
       output
         .toString()
@@ -792,6 +789,41 @@ export class JJRepository {
       "Inserting this change modifies one or more immutable commits, are you sure?",
       "Modify Immutable Change",
     );
+  }
+
+  /**
+   * Copies the changes of files in a change into a new change at the position,
+   * without switching to it. jj cannot copy a diff directly, so the source is
+   * duplicated on top of the new change, the files' changes are squashed from
+   * the duplicate into it, and the duplicate is abandoned.
+   */
+  async copyFileChangesToNewChangeRetryImmutable(
+    fromRev: FullChangeId,
+    targetRev: FullChangeId,
+    position: "onto" | "after" | "before",
+    filepaths: RealPath[],
+  ) {
+    const newChangeId = await this.newAtNoEditRetryImmutable(targetRev, position);
+    if (newChangeId === undefined) {
+      return;
+    }
+    const childrenBefore = await this.changeIdsIn(`${newChangeId}+`);
+    await this.jjCommand(["duplicate", "-r", fromRev, "-o", newChangeId]);
+    const duplicates = [...(await this.changeIdsIn(`${newChangeId}+`))].filter((id) => !childrenBefore.has(id));
+    if (duplicates.length !== 1) {
+      throw new Error("Could not find the duplicated change");
+    }
+    const [duplicateId] = duplicates;
+    await this.jjCommand([
+      "squash",
+      "--from",
+      duplicateId,
+      "--into",
+      newChangeId,
+      "--keep-emptied",
+      ...filepaths.map((filepath) => filepathToFileset(toForwardSlashes(path.relative(this.repositoryRoot, filepath)))),
+    ]);
+    await this.jjCommand(["abandon", duplicateId]);
   }
 
   async commit(message?: string, editor?: boolean) {
