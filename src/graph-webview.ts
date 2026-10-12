@@ -59,7 +59,7 @@ export class JJGraphWebview implements vscode.WebviewViewProvider {
   }[] = [];
 
   private readonly surfaces = new Set<GraphSurface>();
-  private tab: vscode.WebviewPanel | undefined;
+  private readonly tabs = new Set<vscode.WebviewPanel>();
   private lastGraphMessage: UpdateGraphMessage | undefined;
   public repository: JJRepository | undefined;
   public selectedNodes: Set<FullChangeId> = new Set();
@@ -165,10 +165,6 @@ export class JJGraphWebview implements vscode.WebviewViewProvider {
   }
 
   public openInTab(): void {
-    if (this.tab) {
-      this.tab.reveal();
-      return;
-    }
     const panel = vscode.window.createWebviewPanel(GRAPH_TAB_VIEW_TYPE, this.surfaceTitle(), vscode.ViewColumn.Active, {
       enableScripts: true,
       retainContextWhenHidden: true,
@@ -178,20 +174,12 @@ export class JJGraphWebview implements vscode.WebviewViewProvider {
   }
 
   private restoreTab(panel: vscode.WebviewPanel): void {
-    if (this.tab) {
-      panel.dispose();
-      return;
-    }
     void this.attachTab(panel);
   }
 
   private async attachTab(panel: vscode.WebviewPanel): Promise<void> {
-    this.tab = panel;
-    panel.onDidDispose(() => {
-      if (this.tab === panel) {
-        this.tab = undefined;
-      }
-    });
+    this.tabs.add(panel);
+    panel.onDidDispose(() => this.tabs.delete(panel));
     try {
       await this.attachSurface(panel);
       await this.updateElidingContext();

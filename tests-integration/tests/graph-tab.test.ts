@@ -1,5 +1,6 @@
 import type { Frame, Page } from "@playwright/test";
 import { test, expect, runCommand } from "./base-test";
+import { openTwoGraphTabsSideBySide } from "./graph-tabs";
 
 async function findOtherGraphFrame(workbox: Page, sidebarFrame: Frame): Promise<Frame> {
   let found: Frame | undefined;
@@ -62,5 +63,33 @@ test("graph tab mirrors the sidebar graph", async ({ graphFrame, testRepo, workb
     await expect(graphTab).toHaveCount(0);
     await sidebarNodes.nth(1).click();
     await expect(sidebarNodes.nth(1)).toHaveAttribute("data-selected");
+  });
+});
+
+test("each Open Graph in Tab opens another live graph tab", async ({ graphFrame, testRepo, workbox }) => {
+  await testRepo.commitFile("a.txt", "content a", "A");
+  await testRepo.commitFile("b.txt", "content b", "B");
+
+  const sidebarNodes = graphFrame.locator("#nodes > div");
+  await expect(sidebarNodes).toHaveCount(4);
+
+  const [firstTab, secondTab] = await openTwoGraphTabsSideBySide(workbox, graphFrame);
+  const firstNodes = firstTab.locator("#nodes > div");
+  const secondNodes = secondTab.locator("#nodes > div");
+  await expect(firstNodes).toHaveCount(4);
+  await expect(secondNodes).toHaveCount(4);
+
+  await test.step("a repository change updates every graph", async () => {
+    await testRepo.commitFile("c.txt", "content c", "C");
+    await expect(sidebarNodes).toHaveCount(5);
+    await expect(firstNodes).toHaveCount(5);
+    await expect(secondNodes).toHaveCount(5);
+  });
+
+  await test.step("selecting in one tab selects in the other two", async () => {
+    await firstNodes.nth(2).click();
+    await expect(firstNodes.nth(2)).toHaveAttribute("data-selected");
+    await expect(secondNodes.nth(2)).toHaveAttribute("data-selected");
+    await expect(sidebarNodes.nth(2)).toHaveAttribute("data-selected");
   });
 });
