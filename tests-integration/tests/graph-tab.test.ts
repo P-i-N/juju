@@ -93,3 +93,33 @@ test("each Open Graph in Tab opens another live graph tab", async ({ graphFrame,
     await expect(sidebarNodes.nth(2)).toHaveAttribute("data-selected");
   });
 });
+
+test("a graph context menu closes when another graph tab is clicked", async ({ graphFrame, testRepo, workbox }) => {
+  await testRepo.commitFile("a.txt", "content a", "A");
+  await testRepo.commitFile("b.txt", "content b", "B");
+  await expect(graphFrame.locator("#nodes > div")).toHaveCount(4);
+
+  const [leftTab, rightTab] = await openTwoGraphTabsSideBySide(workbox, graphFrame);
+  const leftNodes = leftTab.locator("#nodes > div");
+  const rightNodes = rightTab.locator("#nodes > div");
+  await expect(leftNodes).toHaveCount(4);
+  await expect(rightNodes).toHaveCount(4);
+
+  // Focus the right tab on empty space, below the rows, so that it keeps focus while the menu opens in the left tab.
+  const rightBox = await (await rightTab.frameElement()).boundingBox();
+  expect(rightBox).not.toBeNull();
+  await workbox.mouse.click(rightBox!.x + rightBox!.width - 10, rightBox!.y + rightBox!.height - 10);
+  await expect.poll(() => rightTab.evaluate(() => document.hasFocus())).toBe(true);
+
+  // A synthetic contextmenu event opens the menu without moving focus to the left tab. A real right-click does
+  // not always focus the clicked webview either, which is why the menu cannot rely on the window blur event.
+  await leftNodes.nth(1).dispatchEvent("contextmenu", { bubbles: true, cancelable: true, clientX: 200, clientY: 40 });
+  const leftMenu = leftTab.locator("#context-menu");
+  await expect(leftMenu).toBeVisible();
+  expect(await leftTab.evaluate(() => document.hasFocus())).toBe(false);
+
+  await rightNodes.nth(2).click();
+  await expect(rightNodes.nth(2)).toHaveAttribute("data-selected");
+  await expect(leftNodes.nth(2)).toHaveAttribute("data-selected");
+  await expect(leftMenu).toBeHidden();
+});

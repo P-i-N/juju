@@ -209,6 +209,9 @@ export function App() {
         case "remoteDragEnded":
           applyRemoteDragEnd();
           break;
+        case "closeMenus":
+          closeAllMenus();
+          break;
         case "showStaleState":
           isStale.value = true;
           break;
@@ -354,6 +357,9 @@ export function App() {
     window.addEventListener("message", handleMessage);
     window.addEventListener("blur", closeAllMenus);
 
+    const handlePointerDown = () => postMessage({ command: "graphPointerDown" });
+    window.addEventListener("pointerdown", handlePointerDown, true);
+
     let resizeTimeout: ReturnType<typeof setTimeout> | undefined;
     const handleResize = () => {
       clearTimeout(resizeTimeout);
@@ -376,6 +382,7 @@ export function App() {
       disposeFileHunksFetch();
       window.removeEventListener("message", handleMessage);
       window.removeEventListener("blur", closeAllMenus);
+      window.removeEventListener("pointerdown", handlePointerDown, true);
       window.removeEventListener("resize", handleResize);
       clearTimeout(resizeTimeout);
     };

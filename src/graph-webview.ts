@@ -223,6 +223,10 @@ export class JJGraphWebview implements vscode.WebviewViewProvider {
       }
       return;
     }
+    if (message.command === "graphPointerDown") {
+      void this.postMessageToWebview({ command: "closeMenus" }, source);
+      return;
+    }
     if (
       !this.repository &&
       message.command !== "selectChange" &&
