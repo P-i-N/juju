@@ -6,6 +6,8 @@ import {
   connectedHighlight,
   expandedFileLists,
   changedFilesCache,
+  expandedFileHunks,
+  fileHunksCache,
 } from "../signals";
 import type { FullChangeId } from "../../../graph-protocol";
 import { getLaneColor } from "../svg-utils";
@@ -29,6 +31,8 @@ export function ConnectionLines() {
     void changeIdHorizontalOffset.value;
     void expandedFileLists.value;
     void changedFilesCache.value;
+    void expandedFileHunks.value;
+    void fileHunksCache.value;
 
     const graph = currentGraph.value;
     if (!graph?.edges) {

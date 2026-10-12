@@ -11,6 +11,7 @@ import type {
   WebviewToExtensionMessage,
   FullChangeId,
   ChangedFile,
+  FileHunk,
 } from "../../graph-protocol";
 
 declare function acquireVsCodeApi(): VSCodeAPI;
@@ -89,12 +90,31 @@ export type ChangedFilesState = ChangedFile[] | "loading" | "error";
 // Changed files keyed by commit id: a commit id pins the content, so a loaded file list never goes stale.
 export const changedFilesCache = signal<Map<string, ChangedFilesState>>(new Map());
 export const selectedFiles = signal<FileSelection | null>(null);
+// The last loaded file list of each change, shown while the list of a rewritten commit loads
+// so that expanded changes never collapse in between.
+export const lastChangedFiles = signal<Map<FullChangeId, ChangedFile[]>>(new Map());
+// Expanded hunk lists keyed by fileKey(changeId, path), so they stay open while a change is rewritten.
+export const expandedFileHunks = signal<Set<string>>(new Set());
+export type FileHunksState = FileHunk[] | "loading" | "error";
+// Hunks keyed by fileKey(commitId, path): a commit id pins the content, so loaded hunks never go stale.
+export const fileHunksCache = signal<Map<string, FileHunksState>>(new Map());
+// The last loaded hunks keyed by fileKey(changeId, path), shown while the hunks of a rewritten
+// commit load.
+export const lastFileHunks = signal<Map<string, FileHunk[]>>(new Map());
+// Selected hunks of a single change, keyed by hunkSelectionKey(path, hunk).
+export const selectedHunks = signal<FileSelection | null>(null);
+export type HunkRange = Pick<FileHunk, "oldStart" | "oldLines" | "newStart" | "newLines">;
 export interface DraggedFiles {
   changeId: FullChangeId;
   // The paths to move, including the source paths of renamed files.
   paths: string[];
 }
 export const dragFiles = signal<DraggedFiles | null>(null);
+export interface DraggedHunks {
+  changeId: FullChangeId;
+  hunks: { path: string; hunk: HunkRange }[];
+}
+export const dragHunks = signal<DraggedHunks | null>(null);
 export const supportsTagTracking = signal(false);
 export const currentWorkspace = signal<string | null>(null);
 export const scrollY = signal(0);
@@ -193,6 +213,36 @@ interface FileContextMenuState {
 
 export const fileContextMenu = signal<FileContextMenuState | null>(null);
 
+/** Identifies a hunk by its file and line ranges, which stay valid while the hunks reload. */
+export function hunkSelectionKey(path: string, hunk: HunkRange): string {
+  return `${path}\n${hunk.oldStart},${hunk.oldLines},${hunk.newStart},${hunk.newLines}`;
+}
+
+export function parseHunkSelectionKey(key: string): { path: string; hunk: HunkRange } {
+  const separator = key.lastIndexOf("\n");
+  const [oldStart, oldLines, newStart, newLines] = key
+    .slice(separator + 1)
+    .split(",")
+    .map(Number);
+  return { path: key.slice(0, separator), hunk: { oldStart, oldLines, newStart, newLines } };
+}
+
+export function fileKey(id: string, path: string): string {
+  return `${id}\n${path}`;
+}
+
+export function setFileHunksExpanded(changeId: FullChangeId, paths: Iterable<string>, expanded: boolean) {
+  const next = new Set(expandedFileHunks.value);
+  for (const path of paths) {
+    if (expanded) {
+      next.add(fileKey(changeId, path));
+    } else {
+      next.delete(fileKey(changeId, path));
+    }
+  }
+  expandedFileHunks.value = next;
+}
+
 export function setFileListsExpanded(changeIds: Iterable<FullChangeId>, expanded: boolean) {
   const next = new Set(expandedFileLists.value);
   for (const changeId of changeIds) {
@@ -237,11 +287,22 @@ export type EdgeDropMenuState = {
 
 export const edgeDropMenu = signal<EdgeDropMenuState | null>(null);
 
+interface HunkDropMenuState {
+  fromChangeId: FullChangeId;
+  toChangeId: FullChangeId;
+  hunks: { path: string; hunk: HunkRange }[];
+  clientX: number;
+  clientY: number;
+}
+
+export const hunkDropMenu = signal<HunkDropMenuState | null>(null);
+
 export function isAnyMenuOpen(): boolean {
   return (
     contextMenu.value !== null ||
     rebaseMenu.value !== null ||
     edgeDropMenu.value !== null ||
+    hunkDropMenu.value !== null ||
     pillContextMenu.value !== null ||
     remoteRefContextMenu.value !== null ||
     fileContextMenu.value !== null
@@ -252,6 +313,7 @@ export function closeAllMenus() {
   contextMenu.value = null;
   rebaseMenu.value = null;
   edgeDropMenu.value = null;
+  hunkDropMenu.value = null;
   pillContextMenu.value = null;
   remoteRefContextMenu.value = null;
   fileContextMenu.value = null;

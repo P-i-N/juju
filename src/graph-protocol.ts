@@ -13,6 +13,16 @@ export interface LogEntryRemoteRef {
   remote: string;
 }
 
+export interface FileHunk {
+  oldStart: number;
+  oldLines: number;
+  newStart: number;
+  newLines: number;
+  added: number;
+  removed: number;
+  preview: string;
+}
+
 export interface ChangedFile {
   type: FileStatusType;
   path: string;
@@ -105,6 +115,14 @@ export type WebviewToExtensionMessage =
   | { command: "webviewReady" }
   | { command: "fetchDiffStats"; changeId: FullChangeId }
   | { command: "fetchChangedFiles"; commitId: string }
+  | { command: "fetchFileHunks"; commitId: string; path: string; renamedFrom?: string }
+  | {
+      command: "moveHunks";
+      fromChangeId: FullChangeId;
+      toChangeId: FullChangeId;
+      hunks: { path: string; hunk: Pick<FileHunk, "oldStart" | "oldLines" | "newStart" | "newLines"> }[];
+      duplicate: boolean;
+    }
   | { command: "moveFileChanges"; fromChangeId: FullChangeId; toChangeId: FullChangeId; paths: string[] }
   | { command: "discardFileChanges"; changeId: FullChangeId; files: { path: string; renamedFrom?: string }[] }
   | {
@@ -169,6 +187,7 @@ export type WebviewToExtensionMessage =
       path: string;
       status: FileStatusType;
       renamedFrom?: string;
+      line?: number;
     }
   | { command: "openFileAtRevision"; changeId: FullChangeId; path: string }
   | { command: "openFileInWorkingCopy"; path: string }
@@ -200,6 +219,7 @@ export type ExtensionToWebviewMessage =
   | { command: "setSelection"; selectedNodes: FullChangeId[] }
   | { command: "diffStatsResponse"; changeId: FullChangeId; stats: DiffStats }
   | { command: "changedFilesResponse"; commitId: string; files: ChangedFile[] | null }
+  | { command: "fileHunksResponse"; commitId: string; path: string; hunks: FileHunk[] | null }
   | {
       command: "bookmarkTrackingRemotesResponse";
       bookmark: string;

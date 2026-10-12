@@ -34,6 +34,16 @@ import {
   setFileListsExpanded,
   selectedFiles,
   dragFiles,
+  expandedFileHunks,
+  fileHunksCache,
+  fileKey,
+  selectedHunks,
+  hunkSelectionKey,
+  parseHunkSelectionKey,
+  setFileHunksExpanded,
+  lastChangedFiles,
+  lastFileHunks,
+  dragHunks,
   dragBookmarkName,
   dragStartChangeId,
   pillContextMenu,
@@ -65,6 +75,7 @@ import { SWIMLANE_WIDTH, CHANGE_ID_RIGHT_PADDING, rootChangeId } from "../types"
 import {
   getUniqueId,
   type ChangedFile,
+  type FileHunk,
   type LaneNode,
   type ChangeNode,
   type RegularChangeNode,
@@ -152,7 +163,9 @@ export function ChangeNodeRow({ change, index, nodeData, changeIdRef, compact }:
     () => showChangedFiles.value && change.branchType !== "~" && expandedFileLists.value.has(change.id.changeId),
   );
   const filesState =
-    filesExpanded.value && change.branchType !== "~" ? changedFilesCache.value.get(change.commitId) : undefined;
+    filesExpanded.value && change.branchType !== "~"
+      ? withLastLoaded(changedFilesCache.value.get(change.commitId), lastChangedFiles.value.get(change.id.changeId))
+      : undefined;
   const hasFileArea = Array.isArray(filesState) || filesState === "error";
   const rowZones = hasFileArea ? "top" : "both";
   const dragProps = useDragDrop(change, rowZones);
@@ -181,6 +194,7 @@ export function ChangeNodeRow({ change, index, nodeData, changeIdRef, compact }:
       return;
     }
     selectedFiles.value = null;
+    selectedHunks.value = null;
 
     const outcome = computeSelection(currentChanges.value, index, selectionAnchorId.value, selectedNodes.value, {
       shiftKey: e.shiftKey,
@@ -741,17 +755,19 @@ function FileRowMessage({
   change,
   graphW,
   bottomEdge,
+  class: className,
   children,
 }: {
   change: RegularChangeNode;
   graphW: number;
-  bottomEdge: FileAreaEdge;
+  bottomEdge?: FileAreaEdge;
+  class?: string;
   children: preact.ComponentChildren;
 }) {
-  const { class: edgeClass, ...edgeProps } = fileAreaEdgeProps(change, bottomEdge);
+  const { class: edgeClass, ...edgeProps } = bottomEdge ? fileAreaEdgeProps(change, bottomEdge) : { class: "" };
   return (
     <div
-      class={cx(styles.fileRow, styles.fileRowMessage, edgeClass)}
+      class={cx(styles.fileRow, styles.fileRowMessage, className, edgeClass)}
       data-role="changed-file-message"
       style={fileRowStyle(graphW)}
       {...edgeProps}
@@ -775,6 +791,11 @@ const MemoizedChangedFileRows = memo(function ChangedFileRows({
   const groups = groupChangedFiles(files);
   const ordered = groups.flatMap((g) => g.files);
   const last = ordered.at(-1);
+  // The keys of all hunks shown for the change, in display order, for range selection.
+  const hunkKeys = ordered.flatMap((f) => {
+    const state = shownHunks(change, f);
+    return Array.isArray(state) ? state.map((h) => hunkSelectionKey(f.path, h)) : [];
+  });
   return (
     <>
       {groups.map((group) => (
@@ -803,11 +824,12 @@ const MemoizedChangedFileRows = memo(function ChangedFileRows({
             </div>
           )}
           {group.files.map((f) => (
-            <FileRow
+            <FileEntry
               key={f.path}
               change={change}
               file={f}
               files={ordered}
+              hunkKeys={hunkKeys}
               grouped={group.directory !== ""}
               graphW={graphW}
               bottomEdge={f === last ? bottomEdge : undefined}
@@ -819,10 +841,112 @@ const MemoizedChangedFileRows = memo(function ChangedFileRows({
   );
 });
 
-function FileRow({
+interface FileEntryProps {
+  change: RegularChangeNode;
+  file: ChangedFile;
+  files: ChangedFile[];
+  hunkKeys: string[];
+  grouped: boolean;
+  graphW: number;
+  bottomEdge?: FileAreaEdge;
+}
+
+/**
+ * While the data of a rewritten commit loads, keep showing what was last loaded for the same
+ * change, so that expanded rows do not collapse and reappear.
+ */
+function withLastLoaded<T>(state: T[] | "loading" | "error" | undefined, last: T[] | undefined) {
+  return state === undefined || state === "loading" ? (last ?? state) : state;
+}
+
+/** The hunks shown for an expanded file (or their loading state), undefined when collapsed. */
+function shownHunks(change: RegularChangeNode, file: ChangedFile) {
+  if (!expandedFileHunks.value.has(fileKey(change.id.changeId, file.path))) {
+    return undefined;
+  }
+  return withLastLoaded(
+    fileHunksCache.value.get(fileKey(change.commitId, file.path)),
+    lastFileHunks.value.get(fileKey(change.id.changeId, file.path)),
+  );
+}
+
+/** Moving hunks rebuilds a file from its other hunks, which only works for files modified in place. */
+function canMoveHunksOf(change: RegularChangeNode, file: ChangedFile): boolean {
+  return change.id.changeId !== rootChangeId && file.type === "M" && !file.conflict;
+}
+
+function canHaveHunks(file: ChangedFile): boolean {
+  return !(file.linesAdded === 0 && file.linesRemoved === 0);
+}
+
+function hunkLabel(hunk: FileHunk): string {
+  const start = Math.max(hunk.newStart, 1);
+  return hunk.newLines <= 1 ? `L${start}` : `L${start}\u2013${start + hunk.newLines - 1}`;
+}
+
+/**
+ * A changed file row followed by its hunk rows when expanded. The bottom insert edge of the
+ * file area moves from the file row to its last hunk row while the hunks are shown.
+ */
+function FileEntry(props: FileEntryProps) {
+  const { change, file, files, hunkKeys, grouped, graphW, bottomEdge } = props;
+  const expanded = expandedFileHunks.value.has(fileKey(change.id.changeId, file.path));
+  const hunksState = shownHunks(change, file);
+  const hasHunkRows = Array.isArray(hunksState) || hunksState === "error";
+  return (
+    <>
+      <FileRow
+        {...props}
+        bottomEdge={hasHunkRows ? undefined : bottomEdge}
+        hunksExpanded={expanded}
+        loadingHunks={hunksState === "loading"}
+      />
+      {Array.isArray(hunksState) &&
+        hunksState.map((hunk, index) => (
+          <HunkRow
+            key={index}
+            change={change}
+            file={file}
+            files={files}
+            hunkKeys={hunkKeys}
+            hunk={hunk}
+            index={index}
+            grouped={grouped}
+            graphW={graphW}
+            bottomEdge={index === hunksState.length - 1 ? bottomEdge : undefined}
+          />
+        ))}
+      {Array.isArray(hunksState) && hunksState.length === 0 && (
+        <FileRowMessage
+          change={change}
+          graphW={graphW}
+          bottomEdge={bottomEdge}
+          class={cx(styles.hunkRow, grouped && styles.groupedFileRow)}
+        >
+          No text changes
+        </FileRowMessage>
+      )}
+      {hunksState === "error" && (
+        <FileRowMessage
+          change={change}
+          graphW={graphW}
+          bottomEdge={bottomEdge}
+          class={cx(styles.hunkRow, grouped && styles.groupedFileRow)}
+        >
+          Failed to load changes
+        </FileRowMessage>
+      )}
+    </>
+  );
+}
+
+function HunkRow({
   change,
   file,
   files,
+  hunkKeys,
+  hunk,
+  index,
   grouped,
   graphW,
   bottomEdge,
@@ -830,10 +954,147 @@ function FileRow({
   change: RegularChangeNode;
   file: ChangedFile;
   files: ChangedFile[];
+  hunkKeys: string[];
+  hunk: FileHunk;
+  index: number;
   grouped: boolean;
   graphW: number;
   bottomEdge?: FileAreaEdge;
 }) {
+  const edge = bottomEdge ? fileAreaEdgeProps(change, bottomEdge) : null;
+  const { class: edgeClass, ...edgeProps } = edge ?? { class: "" };
+  const key = hunkSelectionKey(file.path, hunk);
+  const selection = selectedHunks.value;
+  const selected = selection?.changeId === change.id.changeId && selection.paths.has(key);
+  const isInsertEdgeEvent = (e: MouseEvent) =>
+    !!bottomEdge && (e.ctrlKey || e.metaKey) && insertSideAt(change, e, "bottom") !== null;
+  const selectOnly = () => {
+    selectedFiles.value = null;
+    selectedHunks.value = { changeId: change.id.changeId, paths: new Set([key]), anchor: key };
+  };
+  const draggable = canMoveHunksOf(change, file);
+  return (
+    <div
+      class={cx(
+        styles.fileRow,
+        styles.hunkRow,
+        grouped && styles.groupedFileRow,
+        selected && styles.selected,
+        edgeClass,
+      )}
+      style={fileRowStyle(graphW)}
+      title={`@@ -${hunk.oldStart},${hunk.oldLines} +${hunk.newStart},${hunk.newLines} @@
+Double-click to open diff`}
+      data-role="file-hunk"
+      data-hunk-of={change.id.changeId}
+      data-path={file.path}
+      data-index={index}
+      data-selected={selected ? "" : undefined}
+      draggable={draggable}
+      {...edgeProps}
+      onClick={(e) => {
+        if (isDragging.value || justFinishedDrag.value || isInsertEdgeEvent(e)) {
+          return;
+        }
+        selectedFiles.value = null;
+        selectedHunks.value = computeFileSelection(selectedHunks.value, change.id.changeId, hunkKeys, key, {
+          shiftKey: e.shiftKey,
+          toggleKey: e.ctrlKey || e.metaKey,
+        });
+      }}
+      onDblClick={(e) => {
+        if (isInsertEdgeEvent(e)) {
+          edge?.onDblClick(e);
+          return;
+        }
+        selectOnly();
+        postMessage({
+          command: "openFileDiff",
+          changeId: change.id.changeId,
+          path: file.path,
+          status: file.type,
+          ...(file.renamedFrom ? { renamedFrom: file.renamedFrom } : {}),
+          line: Math.max(hunk.newStart, 1),
+        });
+      }}
+      onContextMenu={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+      }}
+      onDragStart={(e) => {
+        if (!draggable) {
+          return;
+        }
+        const draggedKeys = draggedFilePaths(selectedHunks.value, change.id.changeId, hunkKeys, key);
+        if (draggedKeys.length === 1) {
+          selectOnly();
+        }
+        const fileByPath = new Map(files.map((f) => [f.path, f]));
+        const dragged = draggedKeys.map(parseHunkSelectionKey).filter(({ path }) => {
+          const draggedFile = fileByPath.get(path);
+          return draggedFile !== undefined && canMoveHunksOf(change, draggedFile);
+        });
+        dragStartChangeId.value = null;
+        dragBookmarkName.value = null;
+        dragFiles.value = null;
+        dragHunks.value = { changeId: change.id.changeId, hunks: dragged };
+        isDragging.value = true;
+        clearAllTooltipTimers();
+        tooltip.value = null;
+        e.dataTransfer!.setData("text/plain", file.path);
+        e.dataTransfer!.effectAllowed = "move";
+
+        const ghost = document.createElement("div");
+        ghost.className = dragGhostStyles.dragGhost;
+        ghost.textContent = `${fileNameOf(file.path)} ${hunkLabel(hunk)}`;
+        if (dragged.length > 1) {
+          const count = document.createElement("span");
+          count.className = dragGhostStyles.dragGhostCount;
+          count.textContent = `+ ${dragged.length - 1} more`;
+          ghost.appendChild(count);
+        }
+        document.body.appendChild(ghost);
+        e.dataTransfer!.setDragImage(ghost, -15, 0);
+        setTimeout(() => ghost.remove(), 0);
+      }}
+      onDragEnd={() => {
+        isDragging.value = false;
+        dragHunks.value = null;
+        dropTargetId.value = null;
+        hoveredEdge.value = null;
+      }}
+    >
+      <span class={styles.hunkLines} data-role="hunk-lines">
+        {hunkLabel(hunk)}
+      </span>
+      <span class={styles.hunkPreview} data-role="hunk-preview">
+        {hunk.preview}
+      </span>
+      {hunk.added > 0 && (
+        <span class={cx(styles.fileLines, styles.fileLinesAdded)} data-role="hunk-lines-added">
+          +{hunk.added}
+        </span>
+      )}
+      {hunk.removed > 0 && (
+        <span class={cx(styles.fileLines, styles.fileLinesRemoved)} data-role="hunk-lines-removed">
+          -{hunk.removed}
+        </span>
+      )}
+      <span class={styles.fileStatus} />
+    </div>
+  );
+}
+
+function FileRow({
+  change,
+  file,
+  files,
+  grouped,
+  graphW,
+  bottomEdge,
+  hunksExpanded,
+  loadingHunks,
+}: FileEntryProps & { hunksExpanded: boolean; loadingHunks: boolean }) {
   const edge = bottomEdge ? fileAreaEdgeProps(change, bottomEdge) : null;
   const { class: edgeClass, ...edgeProps } = edge ?? { class: "" };
   const selection = selectedFiles.value;
@@ -858,6 +1119,7 @@ Double-click to open diff`}
         if (isDragging.value || justFinishedDrag.value || isInsertEdgeEvent(e)) {
           return;
         }
+        selectedHunks.value = null;
         selectedFiles.value = computeFileSelection(
           selectedFiles.value,
           change.id.changeId,
@@ -871,6 +1133,7 @@ Double-click to open diff`}
           edge?.onDblClick(e);
           return;
         }
+        selectedHunks.value = null;
         selectedFiles.value = { changeId: change.id.changeId, paths: new Set([file.path]), anchor: file.path };
         postMessage({
           command: "openFileDiff",
@@ -907,6 +1170,7 @@ Double-click to open diff`}
         const dragged = files.filter((f) => draggedPaths.includes(f.path));
         dragStartChangeId.value = null;
         dragBookmarkName.value = null;
+        dragHunks.value = null;
         dragFiles.value = {
           changeId: change.id.changeId,
           paths: dragged.flatMap((f) => (f.renamedFrom ? [f.path, f.renamedFrom] : [f.path])),
@@ -937,6 +1201,30 @@ Double-click to open diff`}
         hoveredEdge.value = null;
       }}
     >
+      {canHaveHunks(file) ? (
+        <span
+          class={cx(
+            styles.hunksToggle,
+            "codicon",
+            loadingHunks
+              ? "codicon-loading codicon-modifier-spin"
+              : hunksExpanded
+                ? "codicon-chevron-down"
+                : "codicon-chevron-right",
+          )}
+          data-role="hunks-toggle"
+          role="button"
+          aria-expanded={hunksExpanded}
+          title={hunksExpanded ? "Hide Changes" : "Show Changes"}
+          onClick={(e) => {
+            e.stopPropagation();
+            setFileHunksExpanded(change.id.changeId, [file.path], !hunksExpanded);
+          }}
+          onDblClick={(e) => e.stopPropagation()}
+        />
+      ) : (
+        <span class={styles.hunksToggle} />
+      )}
       <span class={styles.fileName} data-role="file-name">
         {fileNameOf(file.path)}
       </span>

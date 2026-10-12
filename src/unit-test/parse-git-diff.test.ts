@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-floating-promises */
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { parseGitDiffLineCounts } from "../parse-git-diff";
+import { parseGitDiffHunks, parseGitDiffLineCounts } from "../parse-git-diff";
 
 describe("parseGitDiffLineCounts Test Suite", () => {
   it("counts added and removed lines per file", () => {
@@ -128,5 +128,67 @@ describe("parseGitDiffLineCounts Test Suite", () => {
 
   it("returns an empty map for empty output", () => {
     assert.equal(parseGitDiffLineCounts("").size, 0);
+  });
+});
+
+describe("parseGitDiffHunks Test Suite", () => {
+  it("parses zero-context hunks with ranges, counts and previews", () => {
+    const output = [
+      "diff --git a/a.txt b/a.txt",
+      "index 1..2 100644",
+      "--- a/a.txt",
+      "+++ b/a.txt",
+      "@@ -3,2 +3,3 @@",
+      "-old one",
+      "-old two",
+      "+  new one  ",
+      "+new two",
+      "+new three",
+      "@@ -10 +10,0 @@",
+      "-gone",
+      "@@ -20,0 +20 @@",
+      "+inserted",
+    ].join("\n");
+    assert.deepEqual(parseGitDiffHunks(output).get("a.txt"), [
+      { oldStart: 3, oldLines: 2, newStart: 3, newLines: 3, added: 3, removed: 2, preview: "new one" },
+      { oldStart: 10, oldLines: 1, newStart: 10, newLines: 0, added: 0, removed: 1, preview: "gone" },
+      { oldStart: 20, oldLines: 0, newStart: 20, newLines: 1, added: 1, removed: 0, preview: "inserted" },
+    ]);
+  });
+
+  it("treats lines inside a hunk as content even when they look like headers", () => {
+    const output = [
+      "diff --git a/a.txt b/a.txt",
+      "--- a/a.txt",
+      "+++ b/a.txt",
+      "@@ -1,2 +1,2 @@",
+      "--- a/looks-like-a-header",
+      "+++ b/looks-like-a-header",
+      "-plain",
+      "+plain changed",
+    ].join("\n");
+    const hunks = parseGitDiffHunks(output).get("a.txt");
+    assert.equal(hunks?.length, 1);
+    assert.equal(hunks?.[0].added, 2);
+    assert.equal(hunks?.[0].removed, 2);
+    assert.deepEqual(parseGitDiffLineCounts(output).get("a.txt"), { added: 2, removed: 2, binary: false });
+  });
+
+  it("keys renamed files by their new path and gives binary files no hunks", () => {
+    const output = [
+      "diff --git a/old.txt b/new.txt",
+      "rename from old.txt",
+      "rename to new.txt",
+      "--- a/old.txt",
+      "+++ b/new.txt",
+      "@@ -1 +1 @@",
+      "-a",
+      "+b",
+      "diff --git a/img.png b/img.png",
+      "Binary files a/img.png and b/img.png differ",
+    ].join("\n");
+    const hunks = parseGitDiffHunks(output);
+    assert.equal(hunks.get("new.txt")?.length, 1);
+    assert.deepEqual(hunks.get("img.png"), []);
   });
 });

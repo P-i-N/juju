@@ -7,6 +7,8 @@ import {
   postMessage,
   selectedNodes,
   selectionAnchorId,
+  selectedFiles,
+  setFileHunksExpanded,
   setFileListsExpanded,
   showChangedFiles,
 } from "../signals";
@@ -21,7 +23,8 @@ import type { FullChangeId, RegularChangeNode } from "../../../graph-protocol";
  *   extend the selection by one selectable row instead, like a Shift+click
  *   range from the selection anchor.
  * - ArrowRight/ArrowLeft expand/collapse the changed-file lists of the
- *   selected changes when changed files are shown.
+ *   selected changes when changed files are shown, or the hunk lists of the
+ *   selected files while files are selected.
  * - Delete abandons the selected changes exactly like the "Abandon Change" and
  *   "Abandon All Selected Changes" context menu items; the extension side asks
  *   for confirmation before abandoning anything.
@@ -108,7 +111,16 @@ export function useKeyboardShortcuts() {
     };
 
     const expandSelection = (e: KeyboardEvent, expanded: boolean) => {
-      if (!showChangedFiles.value || selectedNodes.value.size === 0) {
+      if (!showChangedFiles.value) {
+        return;
+      }
+      const files = selectedFiles.value;
+      if (files) {
+        e.preventDefault();
+        setFileHunksExpanded(files.changeId, files.paths, expanded);
+        return;
+      }
+      if (selectedNodes.value.size === 0) {
         return;
       }
       e.preventDefault();

@@ -29,7 +29,9 @@ import {
   CancelledError,
 } from "./process";
 import { parseFileStatuses, type ParsedFileStatuses, parseUntrackedFileStatuses } from "./parse-file-statuses";
-import { parseGitDiffLineCounts } from "./parse-git-diff";
+import { parseGitDiffHunkLines, parseGitDiffHunks, parseGitDiffLineCounts } from "./parse-git-diff";
+import { contentWithHunks, isSameHunk, type HunkRange } from "./hunk-content";
+import type { FileHunk } from "./graph-protocol";
 import { readSnapshotDir, readSnapshotFile } from "./diff-snapshot";
 import { parseInterdiffSummary } from "./parse-interdiff-summary";
 import { logger } from "./logger";
@@ -109,6 +111,11 @@ export type {
   DiffFileEntry,
   SplitFileEntry,
 };
+
+export interface SquashedFileContent {
+  filepath: string;
+  content: string;
+}
 
 export type GraphQuery = { revset: string; limit: number };
 export type SnapshotRequest = {
@@ -912,13 +919,11 @@ export class JJRepository {
   async squashContentRetryImmutable({
     fromRev,
     toRev,
-    filepath,
-    content,
+    files,
   }: {
     fromRev: FullChangeId | "@";
     toRev: FullChangeId;
-    filepath: string;
-    content: string;
+    files: SquashedFileContent[];
   }) {
     return this.retryWithImmutable(
       toRev,
@@ -926,15 +931,13 @@ export class JJRepository {
         this.squashContent({
           fromRev,
           toRev,
-          filepath,
-          content,
+          files,
         }),
       () =>
         this.squashContent({
           fromRev,
           toRev,
-          filepath,
-          content,
+          files,
           ignoreImmutable: true,
         }),
       undefined,
@@ -943,29 +946,25 @@ export class JJRepository {
   }
 
   /**
-   * Squashes a portion of the changes in a file from one revision into another.
+   * Squashes a portion of the changes in some files from one revision into another.
    *
    * @param options.fromRev - The revision to squash changes from.
    * @param options.toRev - The revision to squash changes into.
-   * @param options.filepath - The path of the file whose changes will be moved.
-   * @param options.content - The contents of the file at filepath with some of the changes in fromRev applied to it;
-   *                          those changes will be moved to the destination revision.
+   * @param options.files - For every file whose changes will be partly moved, its path and its
+   *                        contents with some of the changes in fromRev applied to it; those
+   *                        changes will be moved to the destination revision.
    */
   private async squashContent({
     fromRev,
     toRev,
-    filepath,
-    content,
+    files,
     ignoreImmutable = false,
   }: {
     fromRev: FullChangeId | "@";
     toRev: FullChangeId;
-    filepath: string;
-    content: string;
+    files: SquashedFileContent[];
     ignoreImmutable?: boolean;
   }): Promise<void> {
-    filepath = resolveRepositoryPath(filepath);
-
     const squashConfigs = getSquashToolConfigs();
     if (!squashConfigs.length) {
       throw new Error("Squash tool not initialized. Ensure useVSCodeAsJJEditor is enabled.");
@@ -1006,16 +1005,18 @@ export class JJRepository {
         ? rightPath
         : path.join(this.repositoryRoot, rightPath);
 
-      const relativeFilePath = path.relative(this.repositoryRoot, filepath);
-      const fileToEdit = path.join(rightFolderAbsolutePath, relativeFilePath);
-
       await fs.rm(rightFolderAbsolutePath, { recursive: true, force: true });
       await fs.mkdir(rightFolderAbsolutePath, { recursive: true });
       await fs.cp(leftFolderAbsolutePath, rightFolderAbsolutePath, {
         recursive: true,
       });
-      await fs.rm(fileToEdit, { force: true });
-      await fs.writeFile(fileToEdit, content);
+      for (const { filepath, content } of files) {
+        const relativeFilePath = path.relative(this.repositoryRoot, resolveRepositoryPath(filepath));
+        const fileToEdit = path.join(rightFolderAbsolutePath, relativeFilePath);
+        await fs.rm(fileToEdit, { force: true });
+        await fs.mkdir(path.dirname(fileToEdit), { recursive: true });
+        await fs.writeFile(fileToEdit, content);
+      }
 
       completeSquashToolRequest(requestId, true);
     } catch (error) {
@@ -1207,6 +1208,78 @@ export class JJRepository {
   async getChangedFiles(commitId: string): Promise<FileStatus[]> {
     const [entry] = await this.log(commitId, 1, { includeFiles: true });
     return entry?.fileStatuses ?? [];
+  }
+
+  /**
+   * Fetches the groups of changed lines (zero-context hunks) of one file in the commit with
+   * the given full commit id. Paths are repository-relative with forward slashes; a renamed
+   * file also needs its old path so that the rename is diffed as such.
+   */
+  async getFileHunks(commitId: string, filePath: string, renamedFrom?: string): Promise<FileHunk[]> {
+    const filesets = [filePath, ...(renamedFrom ? [renamedFrom] : [])].map((p) => filepathToFileset(p));
+    const output = (
+      await this.jjCommandRead(["diff", "-r", commitId, "--git", "--context", "0", ...filesets])
+    ).toString();
+    return parseGitDiffHunks(output).get(filePath) ?? [];
+  }
+
+  /**
+   * Moves (or, with `duplicate`, copies) zero-context hunks of files (as shown by
+   * {@link getFileHunks}) from one change into another. Fails without changing anything when
+   * the source change no longer has one of the hunks, e.g. because it was rewritten since the
+   * hunks were shown.
+   */
+  async squashHunksRetryImmutable({
+    fromRev,
+    toRev,
+    hunks,
+    duplicate,
+  }: {
+    fromRev: FullChangeId;
+    toRev: FullChangeId;
+    hunks: { path: string; hunk: HunkRange }[];
+    duplicate: boolean;
+  }) {
+    const files: SquashedFileContent[] = [];
+    for (const filePath of new Set(hunks.map((h) => h.path))) {
+      const fileset = filepathToFileset(filePath);
+      const fileHunks =
+        parseGitDiffHunkLines(
+          (await this.jjCommandRead(["diff", "-r", fromRev, "--git", "--context", "0", fileset])).toString(),
+        ).get(filePath) ?? [];
+      const keep = new Set<number>();
+      for (const { hunk } of hunks.filter((h) => h.path === filePath)) {
+        const index = fileHunks.findIndex((h) => isSameHunk(h, hunk));
+        if (index === -1) {
+          throw new Error("The change was modified since its changes were shown. Please try again.");
+        }
+        keep.add(index);
+      }
+      const current = (await this.jjCommandRead(["file", "show", "-r", fromRev, fileset])).toString();
+      files.push({
+        filepath: path.join(this.repositoryRoot, filePath),
+        content: contentWithHunks(current, fileHunks, keep),
+      });
+    }
+
+    if (!duplicate) {
+      await this.squashContentRetryImmutable({ fromRev, toRev, files });
+      return;
+    }
+    // A copy of the source change on the same parents has the same hunks; moving them out of
+    // the copy leaves the source change untouched.
+    const siblingsBefore = await this.changeIdsIn(`(${fromRev})-+`);
+    await this.jjCommand(["duplicate", "-r", fromRev]);
+    const copies = [...(await this.changeIdsIn(`(${fromRev})-+`))].filter((id) => !siblingsBefore.has(id));
+    if (copies.length !== 1) {
+      throw new Error("Could not find the duplicated change");
+    }
+    const [copyId] = copies;
+    try {
+      await this.squashContentRetryImmutable({ fromRev: copyId as FullChangeId, toRev, files });
+    } finally {
+      await this.jjCommand(["abandon", `present(${copyId})`]);
+    }
   }
 
   /**

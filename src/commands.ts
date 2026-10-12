@@ -1320,8 +1320,7 @@ export function registerInitCommands(state: ExtensionState): void {
           await repository.squashContentRetryImmutable({
             fromRev: "@",
             toRev: destinationRev,
-            content: result,
-            filepath: originalUri.fsPath,
+            files: [{ filepath: originalUri.fsPath, content: result }],
           });
         }
 

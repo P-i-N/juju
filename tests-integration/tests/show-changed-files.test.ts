@@ -274,6 +274,203 @@ test.describe("with showChangedFiles enabled by default", () => {
     await expect(modified.getByText("content a", { exact: true }).first()).toBeVisible();
   });
 
+  test("a changed file expands into its hunks and a hunk opens the diff", async ({ graphFrame, testRepo, workbox }) => {
+    const lines = Array.from({ length: 20 }, (_, i) => `line ${i + 1}`);
+    await testRepo.commitFile("a.txt", lines.join("\n") + "\n", "base");
+    const changed = [...lines];
+    changed[1] = "changed 2";
+    changed.splice(14, 0, "inserted after 14", "inserted again");
+    const change = await testRepo.commitFile("a.txt", changed.join("\n") + "\n", "edit");
+
+    await graphFrame.locator(`#nodes > div[data-change-id^="${change}/"] [data-role="files-toggle"]`).click();
+    const file = fileRows(graphFrame, change, "a.txt");
+    await expect(file).toBeVisible();
+
+    const hunks = graphFrame.locator(`#nodes > [data-role="file-hunk"][data-hunk-of^="${change}/"][data-path="a.txt"]`);
+    await expect(hunks).toHaveCount(0);
+    await file.locator('[data-role="hunks-toggle"]').click();
+    await expect(hunks).toHaveCount(2);
+    await expect(hunks.nth(0).locator('[data-role="hunk-lines"]')).toHaveText("L2");
+    await expect(hunks.nth(0).locator('[data-role="hunk-preview"]')).toHaveText("changed 2");
+    await expect(hunks.nth(0).locator('[data-role="hunk-lines-added"]')).toHaveText("+1");
+    await expect(hunks.nth(0).locator('[data-role="hunk-lines-removed"]')).toHaveText("-1");
+    await expect(hunks.nth(1).locator('[data-role="hunk-lines"]')).toHaveText("L15\u201316");
+    await expect(hunks.nth(1).locator('[data-role="hunk-lines-removed"]')).toHaveCount(0);
+
+    await hunks.nth(1).click();
+    await expect(hunks.nth(1)).toHaveAttribute("data-selected", "");
+    await expect(file).not.toHaveAttribute("data-selected", "");
+
+    await hunks.nth(1).dblclick();
+    await expect(workbox.locator(".editor-instance")).toBeVisible();
+    await expect(
+      workbox.locator(".editor.modified .view-lines").getByText("inserted after 14", { exact: true }).first(),
+    ).toBeVisible();
+
+    await file.locator('[data-role="hunks-toggle"]').click();
+    await expect(hunks).toHaveCount(0);
+  });
+
+  test("dragging a hunk onto another change moves only that hunk", async ({ graphFrame, testRepo }) => {
+    const lines = Array.from({ length: 20 }, (_, i) => `line ${i + 1}`);
+    const target = await testRepo.commitFile("a.txt", lines.join("\n") + "\n", "target");
+    const changed = [...lines];
+    changed[1] = "changed 2";
+    changed.splice(14, 0, "inserted after 14");
+    const source = await testRepo.commitFile("a.txt", changed.join("\n") + "\n", "source");
+
+    await graphFrame.locator(`#nodes > div[data-change-id^="${source}/"] [data-role="files-toggle"]`).click();
+    await fileRows(graphFrame, source, "a.txt").locator('[data-role="hunks-toggle"]').click();
+    const sourceHunks = graphFrame.locator(
+      `#nodes > [data-role="file-hunk"][data-hunk-of^="${source}/"][data-path="a.txt"]`,
+    );
+    await expect(sourceHunks).toHaveCount(2);
+    await expect(sourceHunks.nth(0)).toHaveAttribute("draggable", "true");
+
+    await sourceHunks.nth(0).dragTo(graphFrame.locator(`#nodes > div[data-change-id^="${target}/"]`));
+    await graphFrame.locator('#hunk-drop-menu [data-action="moveHunks"]').click();
+
+    await expect(sourceHunks).toHaveCount(1);
+    await expect(sourceHunks.nth(0).locator('[data-role="hunk-preview"]')).toHaveText("inserted after 14");
+    const targetLines = [...lines];
+    targetLines[1] = "changed 2";
+    await expect
+      .poll(async () => (await testRepo.jjCommand(["file", "show", "-r", target, "a.txt"])).stdout.toString())
+      .toBe(targetLines.join("\n") + "\n");
+    await expect
+      .poll(async () => (await testRepo.jjCommand(["file", "show", "-r", source, "a.txt"])).stdout.toString())
+      .toBe(changed.join("\n") + "\n");
+  });
+
+  test("moving a hunk keeps the source and destination expanded throughout", async ({ graphFrame, testRepo }) => {
+    const lines = Array.from({ length: 20 }, (_, i) => `line ${i + 1}`);
+    const target = await testRepo.commitFile("a.txt", lines.join("\n") + "\n", "target");
+    const changed = [...lines];
+    changed[1] = "changed 2";
+    changed.splice(14, 0, "inserted after 14");
+    const source = await testRepo.commitFile("a.txt", changed.join("\n") + "\n", "source");
+
+    for (const change of [source, target]) {
+      await graphFrame.locator(`#nodes > div[data-change-id^="${change}/"] [data-role="files-toggle"]`).click();
+      await fileRows(graphFrame, change, "a.txt").locator('[data-role="hunks-toggle"]').click();
+    }
+    const hunkRows = (change: string) =>
+      graphFrame.locator(`#nodes > [data-role="file-hunk"][data-hunk-of^="${change}/"]`);
+    await expect(hunkRows(source)).toHaveCount(2);
+    await expect(hunkRows(target)).toHaveCount(1);
+
+    // Record whether any expanded row of either change disappears at any moment.
+    await graphFrame.evaluate(
+      ({ source, target }) => {
+        const counts = () =>
+          [
+            `[data-file-of^="${source}/"]`,
+            `[data-file-of^="${target}/"]`,
+            `[data-hunk-of^="${source}/"]`,
+            `[data-hunk-of^="${target}/"]`,
+          ].map((selector) => document.querySelectorAll(`#nodes > ${selector}`).length);
+        const state = window as unknown as { sawCollapse: boolean };
+        state.sawCollapse = false;
+        new MutationObserver(() => {
+          if (counts().some((count) => count === 0)) {
+            state.sawCollapse = true;
+          }
+        }).observe(document.getElementById("nodes")!, { childList: true, subtree: true });
+      },
+      { source, target },
+    );
+
+    await hunkRows(source)
+      .nth(0)
+      .dragTo(graphFrame.locator(`#nodes > div[data-change-id^="${target}/"]`));
+    await graphFrame.locator('#hunk-drop-menu [data-action="moveHunks"]').click();
+
+    await expect(hunkRows(source)).toHaveCount(1);
+    await expect(hunkRows(source).nth(0).locator('[data-role="hunk-preview"]')).toHaveText("inserted after 14");
+    await expect(hunkRows(target)).toHaveCount(1);
+    await expect(graphFrame.locator(".codicon-loading")).toHaveCount(0);
+    expect(await graphFrame.evaluate(() => (window as unknown as { sawCollapse: boolean }).sawCollapse)).toBe(false);
+  });
+
+  test("several selected hunks move together", async ({ graphFrame, testRepo }) => {
+    const lines = Array.from({ length: 20 }, (_, i) => `line ${i + 1}`);
+    const target = await testRepo.commitFile("a.txt", lines.join("\n") + "\n", "target");
+    const changed = [...lines];
+    changed[1] = "changed 2";
+    changed[9] = "changed 10";
+    changed.splice(14, 0, "inserted after 14");
+    const source = await testRepo.commitFile("a.txt", changed.join("\n") + "\n", "source");
+
+    await graphFrame.locator(`#nodes > div[data-change-id^="${source}/"] [data-role="files-toggle"]`).click();
+    await fileRows(graphFrame, source, "a.txt").locator('[data-role="hunks-toggle"]').click();
+    const hunks = graphFrame.locator(`#nodes > [data-role="file-hunk"][data-hunk-of^="${source}/"]`);
+    await expect(hunks).toHaveCount(3);
+
+    await hunks.nth(0).click();
+    await hunks.nth(2).click({ modifiers: [mod] });
+    await expect(hunks.nth(0)).toHaveAttribute("data-selected", "");
+    await expect(hunks.nth(1)).not.toHaveAttribute("data-selected", "");
+    await expect(hunks.nth(2)).toHaveAttribute("data-selected", "");
+
+    await hunks.nth(1).click({ modifiers: ["Shift"] });
+    await expect(hunks.nth(0)).not.toHaveAttribute("data-selected", "");
+    await expect(hunks.nth(1)).toHaveAttribute("data-selected", "");
+    await expect(hunks.nth(2)).toHaveAttribute("data-selected", "");
+
+    await hunks.nth(2).dragTo(graphFrame.locator(`#nodes > div[data-change-id^="${target}/"]`));
+    const menu = graphFrame.locator("#hunk-drop-menu");
+    await expect(menu.locator("[data-action]")).toHaveText(["Move", "Duplicate"]);
+    await menu.locator('[data-action="moveHunks"]').click();
+
+    await expect(hunks).toHaveCount(1);
+    await expect(hunks.nth(0).locator('[data-role="hunk-preview"]')).toHaveText("changed 2");
+    const targetLines = [...lines];
+    targetLines[9] = "changed 10";
+    targetLines.splice(14, 0, "inserted after 14");
+    await expect
+      .poll(async () => (await testRepo.jjCommand(["file", "show", "-r", target, "a.txt"])).stdout.toString())
+      .toBe(targetLines.join("\n") + "\n");
+  });
+
+  test("Duplicate copies a hunk to another change and keeps it in the source", async ({ graphFrame, testRepo }) => {
+    const lines = Array.from({ length: 20 }, (_, i) => `line ${i + 1}`);
+    const base = await testRepo.commitFile("a.txt", lines.join("\n") + "\n", "base");
+    const targetLines = [...lines];
+    targetLines[17] = "target 18";
+    const target = await testRepo.commitFile("a.txt", targetLines.join("\n") + "\n", "target");
+    await testRepo.jjCommand(["new", base]);
+    const changed = [...lines];
+    changed[1] = "changed 2";
+    changed.splice(14, 0, "inserted after 14");
+    const source = await testRepo.commitFile("a.txt", changed.join("\n") + "\n", "source");
+
+    await graphFrame.locator(`#nodes > div[data-change-id^="${source}/"] [data-role="files-toggle"]`).click();
+    await fileRows(graphFrame, source, "a.txt").locator('[data-role="hunks-toggle"]').click();
+    const hunks = graphFrame.locator(`#nodes > [data-role="file-hunk"][data-hunk-of^="${source}/"]`);
+    await expect(hunks).toHaveCount(2);
+
+    await hunks.nth(0).dragTo(graphFrame.locator(`#nodes > div[data-change-id^="${target}/"]`));
+    await graphFrame.locator('#hunk-drop-menu [data-action="duplicateHunks"]').click();
+
+    const duplicatedLines = [...targetLines];
+    duplicatedLines[1] = "changed 2";
+    await expect
+      .poll(async () => (await testRepo.jjCommand(["file", "show", "-r", target, "a.txt"])).stdout.toString())
+      .toBe(duplicatedLines.join("\n") + "\n");
+    expect((await testRepo.jjCommand(["file", "show", "-r", source, "a.txt"])).stdout.toString()).toBe(
+      changed.join("\n") + "\n",
+    );
+    await expect(hunks).toHaveCount(2);
+    // The temporary copy of the source change is gone again.
+    expect(
+      (await testRepo.jjCommand(["log", "-r", `${base}+`, "--no-graph", "-T", 'change_id ++ "\\n"'])).stdout
+        .toString()
+        .trim()
+        .split("\n")
+        .sort(),
+    ).toEqual([source, target].sort());
+  });
+
   test("conflicted file with a regular diff entry keeps the conflict indicator", async ({ graphFrame, testRepo }) => {
     // Two sibling branches each add conflict.txt with different content, so
     // merging them produces a conflict.

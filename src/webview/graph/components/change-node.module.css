@@ -174,7 +174,7 @@
   cursor: pointer;
   padding-left: calc(
     var(--change-id-ch-width, 4ch) + var(--change-id-offset-width, 0ch) + var(--change-id-right-padding) +
-      var(--graph-width) + 4px + 18px + var(--file-indent, 0px)
+      var(--graph-width) + 4px + var(--file-indent, 0px) + var(--hunk-indent, 0px)
   );
   line-height: 1.6;
   user-select: none;
@@ -214,6 +214,46 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.hunksToggle {
+  flex-shrink: 0;
+  width: 16px;
+  margin-right: 2px;
+  text-align: center;
+  border-radius: 3px;
+  opacity: 0.7;
+}
+
+.hunksToggle.codicon {
+  font-size: 14px;
+  font-weight: normal;
+}
+
+.hunksToggle.codicon:hover {
+  opacity: 1;
+  background: var(--vscode-toolbar-hoverBackground);
+}
+
+.hunkRow {
+  --hunk-indent: 18px;
+}
+
+.hunkLines {
+  flex-shrink: 0;
+  margin-right: 8px;
+  opacity: 0.7;
+  font-variant-numeric: tabular-nums;
+}
+
+.hunkPreview {
+  flex: 1;
+  min-width: 0;
+  white-space: pre;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: var(--vscode-editor-font-family, monospace);
+  opacity: 0.85;
 }
 
 .fileName {

@@ -8,6 +8,8 @@ import {
   connectedHighlight,
   expandedFileLists,
   changedFilesCache,
+  expandedFileHunks,
+  fileHunksCache,
 } from "../signals";
 import { CIRCLE_RADIUS } from "../types";
 import { getUniqueId, type ChangeNode, type LaneNode } from "../../../graph-protocol";
@@ -74,6 +76,8 @@ export function NodeCircles() {
     void changeIdHorizontalOffset.value;
     void expandedFileLists.value;
     void changedFilesCache.value;
+    void expandedFileHunks.value;
+    void fileHunksCache.value;
 
     const graph = currentGraph.value;
     if (!graph) {

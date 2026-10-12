@@ -29,6 +29,11 @@ import {
   showChangedFiles,
   expandedFileLists,
   changedFilesCache,
+  expandedFileHunks,
+  fileHunksCache,
+  fileKey,
+  lastChangedFiles,
+  lastFileHunks,
   pillContextMenu,
   remoteRefContextMenu,
   closeAllMenus,
@@ -37,6 +42,7 @@ import { Graph } from "./components/graph";
 import { ContextMenu } from "./components/context-menu";
 import { RebaseMenu } from "./components/rebase-menu";
 import { EdgeDropMenu } from "./components/edge-drop-menu";
+import { HunkDropMenu } from "./components/hunk-drop-menu";
 import { PillContextMenu } from "./components/pill-context-menu";
 import { RemoteRefContextMenu } from "./components/remote-ref-context-menu";
 import { FileContextMenu } from "./components/file-context-menu";
@@ -48,7 +54,7 @@ import { ErrorState } from "./components/error-state";
 import { ErrorBoundary } from "./components/error-boundary";
 import type { PendingGraphUpdate } from "./signals";
 import { mirroredSelection } from "./selection";
-import { RegularChangeNode, type ExtensionToWebviewMessage } from "../../graph-protocol";
+import { RegularChangeNode, type ExtensionToWebviewMessage, type FullChangeId } from "../../graph-protocol";
 
 export function App() {
   useEffect(() => {
@@ -66,6 +72,19 @@ export function App() {
       );
       changedFilesCache.value = new Map(
         Array.from(changedFilesCache.value).filter(([commitId]) => newCommitIds.has(commitId)),
+      );
+      const idOfFileKey = (key: string) => key.slice(0, key.indexOf("\n"));
+      expandedFileHunks.value = new Set(
+        Array.from(expandedFileHunks.value).filter((key) => newChangeIds.has(idOfFileKey(key) as FullChangeId)),
+      );
+      fileHunksCache.value = new Map(
+        Array.from(fileHunksCache.value).filter(([key]) => newCommitIds.has(idOfFileKey(key))),
+      );
+      lastChangedFiles.value = new Map(
+        Array.from(lastChangedFiles.value).filter(([changeId]) => newChangeIds.has(changeId)),
+      );
+      lastFileHunks.value = new Map(
+        Array.from(lastFileHunks.value).filter(([key]) => newChangeIds.has(idOfFileKey(key) as FullChangeId)),
       );
       diffStatsCache.value = new Map();
       const activeTooltip = tooltip.value;
@@ -126,6 +145,51 @@ export function App() {
       changedFilesCache.value = next;
     });
 
+    // Hunks are loaded lazily as well: request them for every expanded file of an expanded
+    // change whose file list is loaded.
+    const disposeFileHunksFetch = effect(() => {
+      const expandedHunks = expandedFileHunks.value;
+      if (!showChangedFiles.value || expandedHunks.size === 0) {
+        return;
+      }
+      const expandedLists = expandedFileLists.value;
+      const fileLists = changedFilesCache.value;
+      const cache = fileHunksCache.peek();
+      const next = new Map(cache);
+      for (const change of currentChanges.value) {
+        if (change.branchType === "~" || !expandedLists.has(change.id.changeId)) {
+          continue;
+        }
+        const files = fileLists.get(change.commitId);
+        if (!Array.isArray(files)) {
+          continue;
+        }
+        for (const file of files) {
+          if (!expandedHunks.has(fileKey(change.id.changeId, file.path))) {
+            continue;
+          }
+          const key = fileKey(change.commitId, file.path);
+          const state = cache.get(key);
+          if (state !== undefined && state !== "error") {
+            continue;
+          }
+          next.set(key, "loading");
+          postMessage({
+            command: "fetchFileHunks",
+            commitId: change.commitId,
+            path: file.path,
+            ...(file.renamedFrom ? { renamedFrom: file.renamedFrom } : {}),
+          });
+        }
+      }
+      if (next.size !== cache.size || Array.from(next).some(([key, state]) => cache.get(key) !== state)) {
+        fileHunksCache.value = next;
+      }
+    });
+
+    const changesWithCommit = (commitId: string) =>
+      currentChanges.value.filter((c): c is RegularChangeNode => c.branchType !== "~" && c.commitId === commitId);
+
     const handleMessage = (event: MessageEvent) => {
       const message = event.data as ExtensionToWebviewMessage;
       switch (message.command) {
@@ -164,6 +228,23 @@ export function App() {
           }
           break;
         }
+        case "fileHunksResponse": {
+          const key = fileKey(message.commitId, message.path);
+          if (fileHunksCache.value.get(key) !== "loading") {
+            break;
+          }
+          const next = new Map(fileHunksCache.value);
+          next.set(key, message.hunks ?? "error");
+          fileHunksCache.value = next;
+          if (message.hunks) {
+            const last = new Map(lastFileHunks.value);
+            for (const change of changesWithCommit(message.commitId)) {
+              last.set(fileKey(change.id.changeId, message.path), message.hunks);
+            }
+            lastFileHunks.value = last;
+          }
+          break;
+        }
         case "changedFilesResponse": {
           if (changedFilesCache.value.get(message.commitId) !== "loading") {
             break;
@@ -171,6 +252,13 @@ export function App() {
           const next = new Map(changedFilesCache.value);
           next.set(message.commitId, message.files ?? "error");
           changedFilesCache.value = next;
+          if (message.files) {
+            const last = new Map(lastChangedFiles.value);
+            for (const change of changesWithCommit(message.commitId)) {
+              last.set(change.id.changeId, message.files);
+            }
+            lastChangedFiles.value = last;
+          }
           break;
         }
         case "bookmarkTrackingRemotesResponse": {
@@ -275,6 +363,7 @@ export function App() {
     return () => {
       dispose();
       disposeChangedFilesFetch();
+      disposeFileHunksFetch();
       window.removeEventListener("message", handleMessage);
       window.removeEventListener("blur", closeAllMenus);
       window.removeEventListener("resize", handleResize);
@@ -298,6 +387,7 @@ export function App() {
       <ContextMenu />
       <RebaseMenu />
       <EdgeDropMenu />
+      <HunkDropMenu />
       <PillContextMenu />
       <RemoteRefContextMenu />
       <FileContextMenu />

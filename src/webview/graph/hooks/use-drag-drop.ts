@@ -7,6 +7,8 @@ import {
   tooltip,
   dragBookmarkName,
   dragFiles,
+  dragHunks,
+  hunkDropMenu,
   postMessage,
   closeAllMenus,
   selectedNodes,
@@ -78,6 +80,7 @@ export function useDragDrop(change: ChangeNode, zones: EdgeZones = "both") {
           }
           dragBookmarkName.value = null;
           dragFiles.value = null;
+          dragHunks.value = null;
           dragStartChangeId.value = change.id.changeId;
           isDragging.value = true;
           clearAllTimers();
@@ -146,13 +149,16 @@ export function useDragDrop(change: ChangeNode, zones: EdgeZones = "both") {
       if (!isDragging.value) {
         return;
       }
-      if (!dragBookmarkName.value && !dragStartChangeId.value && !dragFiles.value) {
+      if (!dragBookmarkName.value && !dragStartChangeId.value && !dragFiles.value && !dragHunks.value) {
         return;
       }
       if (dragStartChangeId.value && change.id.changeId === dragStartChangeId.value) {
         return;
       }
       if (dragFiles.value && change.id.changeId === dragFiles.value.changeId) {
+        return;
+      }
+      if (dragHunks.value && change.id.changeId === dragHunks.value.changeId) {
         return;
       }
       dropTargetId.value = change.id.changeId;
@@ -193,6 +199,30 @@ export function useDragDrop(change: ChangeNode, zones: EdgeZones = "both") {
       }
 
       if (dropOnEdge(change, e, zones)) {
+        return;
+      }
+
+      if (dragHunks.value) {
+        const dragged = dragHunks.value;
+        clearAllTimers();
+        tooltip.value = null;
+        isDragging.value = false;
+        dragHunks.value = null;
+        dropTargetId.value = null;
+        justFinishedDrag.value = true;
+        setTimeout(() => {
+          justFinishedDrag.value = false;
+        }, 100);
+        if (dragged.changeId !== change.id.changeId) {
+          closeAllMenus();
+          hunkDropMenu.value = {
+            fromChangeId: dragged.changeId,
+            toChangeId: change.id.changeId,
+            hunks: dragged.hunks,
+            clientX: e.clientX,
+            clientY: e.clientY,
+          };
+        }
         return;
       }
 

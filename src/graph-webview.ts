@@ -21,6 +21,7 @@ import { assignLanes } from "./lane-assigner";
 import {
   getUniqueId,
   type ChangedFile,
+  type FileHunk,
   type ChangeNode,
   type RegularChangeNode,
   type WebviewToExtensionMessage,
@@ -812,8 +813,33 @@ export class JJGraphWebview implements vscode.WebviewViewProvider {
         this.postMessageToWebview({ command: "changedFilesResponse", commitId: message.commitId, files });
         break;
       }
+      case "moveHunks":
+        await this.withRefresh(message.duplicate ? "duplicate changes" : "move changes", () =>
+          repo.squashHunksRetryImmutable({
+            fromRev: message.fromChangeId,
+            toRev: message.toChangeId,
+            hunks: message.hunks,
+            duplicate: message.duplicate,
+          }),
+        );
+        break;
+      case "fetchFileHunks": {
+        let hunks: FileHunk[] | null = null;
+        try {
+          hunks = await repo.getFileHunks(message.commitId, message.path, message.renamedFrom);
+        } catch (error: unknown) {
+          logger.warn(`Failed to load hunks: ${error instanceof Error ? error.message : String(error)}`);
+        }
+        this.postMessageToWebview({
+          command: "fileHunksResponse",
+          commitId: message.commitId,
+          path: message.path,
+          hunks,
+        });
+        break;
+      }
       case "openFileDiff": {
-        const { changeId, path: relPath, status, renamedFrom } = message;
+        const { changeId, path: relPath, status, renamedFrom, line } = message;
         const absPath = joinRepositoryPath(repo.repositoryRoot, relPath);
         const fileUri = toWorkspaceUri(absPath);
 
@@ -847,7 +873,9 @@ export class JJGraphWebview implements vscode.WebviewViewProvider {
           const title = useWorkingCopyRight
             ? formatDiffTitle(renamedFrom, path.basename(relPath), `${toRev} Parent`, formatWorkingCopyTitle())
             : formatDiffTitle(renamedFrom, path.basename(relPath), undefined, toRev);
-          await vscode.commands.executeCommand("vscode.diff", beforeUri, afterUri, title);
+          const options: vscode.TextDocumentShowOptions | undefined =
+            line === undefined ? undefined : { selection: new vscode.Range(line - 1, 0, line - 1, 0) };
+          await vscode.commands.executeCommand("vscode.diff", beforeUri, afterUri, title, options);
         } catch (error: unknown) {
           showErrorMessage("Failed to open diff", error);
         }
