@@ -331,6 +331,30 @@ test("dropping onto the dragged change in another graph tab does nothing", async
   expect(await testRepo.log()).toEqual(logBefore);
 });
 
+test("dropping a changed file in a graph tab that has not received the drag does nothing", async ({
+  graphFrame,
+  testRepo,
+  workbox,
+}) => {
+  const idA = await testRepo.commitFile("a.txt", "content a", "A");
+  await testRepo.writeFile("b.txt", "content b");
+  await testRepo.writeFile("c.txt", "content c");
+  await testRepo.commit("B");
+  await expect(graphFrame.locator("#nodes > div[data-change-id]")).toHaveCount(4);
+  const logBefore = await testRepo.log();
+  const [source, target] = await openTwoGraphTabsSideBySide(workbox, graphFrame);
+
+  // The drag is never started in the source tab, so it is never relayed: the target tab only sees the file path in the
+  // drop data, as when the relay arrives after the drop.
+  await dispatchDrag(changeRow(target, idA), "drop", {}, "b.txt");
+  await dispatchDrag(changeRow(target, idA), "drop", { side: "top", ctrl: true }, "b.txt");
+
+  for (const frame of [source, target, graphFrame]) {
+    await expect(frame.locator("#rebase-menu, #context-menu, #edge-drop-menu, #hunk-drop-menu")).toHaveCount(0);
+  }
+  expect(await testRepo.log()).toEqual(logBefore);
+});
+
 test("a cancelled cross-tab drag leaves no graph tab stuck", async ({ graphFrame, testRepo, workbox }) => {
   await testRepo.commitFile("a.txt", "content a", "A");
   await testRepo.commitFile("b.txt", "content b", "B");

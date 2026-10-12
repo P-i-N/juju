@@ -59,7 +59,6 @@ export class JJGraphWebview implements vscode.WebviewViewProvider {
   }[] = [];
 
   private readonly surfaces = new Set<GraphSurface>();
-  private readonly tabs = new Set<vscode.WebviewPanel>();
   private activeDrag: { source: GraphSurface } | undefined;
   private lastGraphMessage: UpdateGraphMessage | undefined;
   public repository: JJRepository | undefined;
@@ -186,8 +185,6 @@ export class JJGraphWebview implements vscode.WebviewViewProvider {
   }
 
   private async attachTab(panel: vscode.WebviewPanel): Promise<void> {
-    this.tabs.add(panel);
-    panel.onDidDispose(() => this.tabs.delete(panel));
     try {
       await this.attachSurface(panel);
       await this.updateElidingContext();

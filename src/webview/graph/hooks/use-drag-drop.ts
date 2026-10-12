@@ -16,12 +16,13 @@ import {
   dragSourceIds,
   edgeDropMenu,
   edgeHighlight,
+  currentChanges,
 } from "../signals";
 import { clearHoveredEdge, edgeDropAt, updateHoveredEdge, type EdgeZones } from "../edge-hover";
 import { clearRemoteDragNow } from "../drag-relay";
 import { createTooltipTimers } from "./tooltip-timers";
 import { rootChangeId } from "../types";
-import type { ChangeNode, FullChangeId } from "../../../graph-protocol";
+import type { ChangeNode, FullChangeId, RegularChangeNode } from "../../../graph-protocol";
 import changeNodeStyles from "../components/change-node.module.css";
 import dragGhostStyles from "../components/drag-ghost.module.css";
 
@@ -57,6 +58,30 @@ export function dropOnEdge(change: ChangeNode, e: DragEvent, zones: EdgeZones = 
     ? { ...common, kind: "files", fromChangeId: files.changeId, paths: files.paths }
     : { ...common, kind: "changes", sourceIds };
   return true;
+}
+
+function isChangeInGraph(id: string): boolean {
+  return currentChanges.value.some((c) => c.branchType !== "~" && c.id.changeId === id);
+}
+
+/** Highlights the row as the drop target unless the drag in progress started on it. */
+function applyDropTarget(change: RegularChangeNode): void {
+  if (!isDragging.value) {
+    return;
+  }
+  if (!dragBookmarkName.value && !dragStartChangeId.value && !dragFiles.value && !dragHunks.value) {
+    return;
+  }
+  if (dragStartChangeId.value && change.id.changeId === dragStartChangeId.value) {
+    return;
+  }
+  if (dragFiles.value && change.id.changeId === dragFiles.value.changeId) {
+    return;
+  }
+  if (dragHunks.value && change.id.changeId === dragHunks.value.changeId) {
+    return;
+  }
+  dropTargetId.value = change.id.changeId;
 }
 
 export function useDragDrop(change: ChangeNode, zones: EdgeZones = "both") {
@@ -144,25 +169,12 @@ export function useDragDrop(change: ChangeNode, zones: EdgeZones = "both") {
       e.preventDefault();
       e.dataTransfer!.dropEffect = "move";
       updateHoveredEdge(change, e, zones);
+      // A drag relayed from another graph window can arrive after the pointer entered the row.
+      applyDropTarget(change);
     },
     onDragEnter: (e: DragEvent) => {
       e.preventDefault();
-      if (!isDragging.value) {
-        return;
-      }
-      if (!dragBookmarkName.value && !dragStartChangeId.value && !dragFiles.value && !dragHunks.value) {
-        return;
-      }
-      if (dragStartChangeId.value && change.id.changeId === dragStartChangeId.value) {
-        return;
-      }
-      if (dragFiles.value && change.id.changeId === dragFiles.value.changeId) {
-        return;
-      }
-      if (dragHunks.value && change.id.changeId === dragHunks.value.changeId) {
-        return;
-      }
-      dropTargetId.value = change.id.changeId;
+      applyDropTarget(change);
     },
     onDragLeave: (e: DragEvent) => {
       const relatedTarget = e.relatedTarget as HTMLElement | null;
@@ -249,10 +261,14 @@ export function useDragDrop(change: ChangeNode, zones: EdgeZones = "both") {
         return;
       }
 
-      const sourceId = (dragStartChangeId.value ?? e.dataTransfer!.getData("text/plain")) as FullChangeId;
+      // Without drag state the drop is only attributable when its text names a change in this graph; a file or hunk
+      // drag whose relay has not arrived yet carries a path there.
+      const droppedId = e.dataTransfer!.getData("text/plain");
+      const sourceId = (dragStartChangeId.value ??
+        (isChangeInGraph(droppedId) ? droppedId : null)) as FullChangeId | null;
       // When the dragged change is part of a multi-selection, operate on every
       // selected change; otherwise fall back to just the dragged one.
-      const sourceIds = dragSourceIds.value.length > 0 ? dragSourceIds.value : [sourceId];
+      const sourceIds = dragSourceIds.value.length > 0 ? dragSourceIds.value : sourceId ? [sourceId] : [];
       // A drag from another graph window gets no dragend here.
       clearRemoteDragNow();
       const targetId = change.id.changeId;
