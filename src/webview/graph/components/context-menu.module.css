@@ -3,8 +3,8 @@
   position: absolute;
   background-color: var(--vscode-menu-background);
   border: 1px solid var(--vscode-menu-border);
-  border-radius: 5px;
-  box-shadow: 0 0 8px 2px var(--vscode-widget-shadow, rgba(0, 0, 0, 0.36));
+  border-radius: var(--vscode-cornerRadius-large, 8px);
+  box-shadow: var(--vscode-shadow-lg, 0 0 12px rgba(0, 0, 0, 0.14));
   padding: 4px 0;
   user-select: none;
 }
@@ -24,9 +24,11 @@
 .contextSubmenuItem {
   display: flex;
   align-items: center;
-  height: 26px;
+  height: 24px;
   box-sizing: border-box;
+  margin: 0 4px;
   padding: 0 26px;
+  border-radius: var(--vscode-cornerRadius-medium, 6px);
   cursor: pointer;
   font-size: var(--vscode-font-size, 13px);
   line-height: 1;
@@ -35,8 +37,8 @@
 
 .contextMenuItem:hover,
 .contextSubmenuItem:hover {
-  background-color: var(--vscode-menu-selectionBackground);
-  color: var(--vscode-menu-selectionForeground);
+  background-color: var(--vscode-list-hoverBackground);
+  color: var(--vscode-list-hoverForeground, var(--vscode-menu-foreground));
 }
 
 .contextMenuItem.disabled {
