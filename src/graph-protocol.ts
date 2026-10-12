@@ -111,8 +111,24 @@ export interface DiffStats {
   linesRemoved: number;
 }
 
+export type GraphDragPayload =
+  | { kind: "changes"; startId: FullChangeId; sourceIds: FullChangeId[] }
+  | { kind: "bookmark"; name: string }
+  | { kind: "files"; changeId: FullChangeId; paths: string[] }
+  | {
+      kind: "hunks";
+      changeId: FullChangeId;
+      hunks: {
+        path: string;
+        hunk: Pick<FileHunk, "oldStart" | "oldLines" | "newStart" | "newLines">;
+      }[];
+    };
+
 export type WebviewToExtensionMessage =
   | { command: "webviewReady" }
+  | { command: "dragStarted"; payload: GraphDragPayload }
+  | { command: "dragEnded" }
+  | { command: "graphPointerDown" }
   | { command: "fetchDiffStats"; changeId: FullChangeId }
   | { command: "fetchChangedFiles"; commitId: string }
   | { command: "fetchFileHunks"; commitId: string; path: string; renamedFrom?: string }
@@ -212,6 +228,9 @@ export type ExtensionToWebviewMessage =
       supportsTagTracking: boolean;
       currentWorkspace: string | undefined;
     }
+  | { command: "remoteDragStarted"; payload: GraphDragPayload }
+  | { command: "remoteDragEnded" }
+  | { command: "closeMenus" }
   | { command: "showStaleState" }
   | { command: "showJJNotFoundState" }
   | { command: "showNoRepoFoundState" }
