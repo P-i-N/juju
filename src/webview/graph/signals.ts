@@ -51,8 +51,16 @@ export const bookmarkDropPreviewTargetId = computed(() => {
 export const hoveredChangeId = signal<string | null>(null);
 export const insertModifierHeld = signal(false);
 export const hoveredEdge = signal<HoveredEdge | null>(null);
+/** True while this graph shows a drag that started in another graph window. */
+export const remoteDrag = signal(false);
+/** The changes of a drag that started in another graph window, as that window resolved them. */
+export const remoteDragSourceIds = signal<FullChangeId[] | null>(null);
 /** The changes being dragged: the whole selection when the dragged change is part of a multi-selection. */
 export const dragSourceIds = computed<FullChangeId[]>(() => {
+  const remote = remoteDragSourceIds.value;
+  if (remote) {
+    return remote;
+  }
   const start = dragStartChangeId.value as FullChangeId | null;
   if (!start) {
     return [];

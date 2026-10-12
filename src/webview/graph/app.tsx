@@ -54,6 +54,7 @@ import { ErrorState } from "./components/error-state";
 import { ErrorBoundary } from "./components/error-boundary";
 import type { PendingGraphUpdate } from "./signals";
 import { mirroredSelection } from "./selection";
+import { applyRemoteDragEnd, applyRemoteDragStart, installDragRelay } from "./drag-relay";
 import { RegularChangeNode, type ExtensionToWebviewMessage, type FullChangeId } from "../../graph-protocol";
 
 export function App() {
@@ -111,6 +112,8 @@ export function App() {
       offsetWidth.value = message.offsetWidth;
       scrollY.value = message.preserveScroll ? window.scrollY : 0;
     };
+
+    const disposeDragRelay = installDragRelay();
 
     const dispose = effect(() => {
       if (!isDragging.value && pendingGraphUpdate.value) {
@@ -199,6 +202,12 @@ export function App() {
             break;
           }
           applyGraphUpdate(message);
+          break;
+        case "remoteDragStarted":
+          applyRemoteDragStart(message.payload);
+          break;
+        case "remoteDragEnded":
+          applyRemoteDragEnd();
           break;
         case "showStaleState":
           isStale.value = true;
@@ -361,6 +370,7 @@ export function App() {
     postMessage({ command: "webviewReady" });
 
     return () => {
+      disposeDragRelay();
       dispose();
       disposeChangedFilesFetch();
       disposeFileHunksFetch();

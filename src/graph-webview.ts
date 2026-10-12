@@ -60,6 +60,7 @@ export class JJGraphWebview implements vscode.WebviewViewProvider {
 
   private readonly surfaces = new Set<GraphSurface>();
   private readonly tabs = new Set<vscode.WebviewPanel>();
+  private activeDrag: { source: GraphSurface } | undefined;
   private lastGraphMessage: UpdateGraphMessage | undefined;
   public repository: JJRepository | undefined;
   public selectedNodes: Set<FullChangeId> = new Set();
@@ -117,7 +118,14 @@ export class JJGraphWebview implements vscode.WebviewViewProvider {
 
   private async attachSurface(surface: GraphSurface): Promise<void> {
     this.surfaces.add(surface);
-    surface.onDidDispose(() => this.surfaces.delete(surface));
+    surface.onDidDispose(() => {
+      this.surfaces.delete(surface);
+      if (this.activeDrag?.source === surface) {
+        // The surface's dragend will never arrive.
+        this.activeDrag = undefined;
+        void this.postMessageToWebview({ command: "remoteDragEnded" });
+      }
+    });
     surface.title = this.surfaceTitle();
 
     surface.webview.options = {
@@ -201,6 +209,18 @@ export class JJGraphWebview implements vscode.WebviewViewProvider {
   private async handleMessage(message: Message, source: GraphSurface): Promise<void> {
     if (message.command === "webviewReady") {
       this.sendCurrentState(source);
+      return;
+    }
+    if (message.command === "dragStarted") {
+      this.activeDrag = { source };
+      void this.postMessageToWebview({ command: "remoteDragStarted", payload: message.payload }, source);
+      return;
+    }
+    if (message.command === "dragEnded") {
+      if (this.activeDrag?.source === source) {
+        this.activeDrag = undefined;
+        void this.postMessageToWebview({ command: "remoteDragEnded" }, source);
+      }
       return;
     }
     if (

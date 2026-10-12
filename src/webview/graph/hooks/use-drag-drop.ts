@@ -18,6 +18,7 @@ import {
   edgeHighlight,
 } from "../signals";
 import { clearHoveredEdge, edgeDropAt, updateHoveredEdge, type EdgeZones } from "../edge-hover";
+import { clearRemoteDragNow } from "../drag-relay";
 import { createTooltipTimers } from "./tooltip-timers";
 import { rootChangeId } from "../types";
 import type { ChangeNode, FullChangeId } from "../../../graph-protocol";
@@ -248,19 +249,16 @@ export function useDragDrop(change: ChangeNode, zones: EdgeZones = "both") {
         return;
       }
 
-      const sourceId = e.dataTransfer!.getData("text/plain") as FullChangeId;
+      const sourceId = (dragStartChangeId.value ?? e.dataTransfer!.getData("text/plain")) as FullChangeId;
+      // When the dragged change is part of a multi-selection, operate on every
+      // selected change; otherwise fall back to just the dragged one.
+      const sourceIds = dragSourceIds.value.length > 0 ? dragSourceIds.value : [sourceId];
+      // A drag from another graph window gets no dragend here.
+      clearRemoteDragNow();
       const targetId = change.id.changeId;
       if (!sourceId || !targetId || sourceId === targetId) {
         return;
       }
-
-      // When the dragged change is part of a multi-selection, operate on every
-      // selected change; otherwise fall back to just the dragged one.
-      const selection = selectedNodes.value;
-      const sourceIds: FullChangeId[] =
-        selection.size > 1 && selection.has(sourceId)
-          ? [sourceId, ...[...selection].filter((id) => id !== sourceId)]
-          : [sourceId];
 
       clearAllTimers();
       tooltip.value = null;
