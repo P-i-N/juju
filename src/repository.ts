@@ -1178,6 +1178,21 @@ export class JJRepository {
   }
 
   /**
+   * Fetches the per-file added/removed line counts of the commit with the given full commit id,
+   * keyed by repository-relative path (forward slashes). Binary files are omitted.
+   */
+  async getChangedFileLineCounts(commitId: string): Promise<Map<string, { added: number; removed: number }>> {
+    const counts = parseGitDiffLineCounts((await this.jjCommandRead(["diff", "-r", commitId, "--git"])).toString());
+    const result = new Map<string, { added: number; removed: number }>();
+    for (const [filePath, count] of counts) {
+      if (!count.binary) {
+        result.set(filePath, { added: count.added, removed: count.removed });
+      }
+    }
+    return result;
+  }
+
+  /**
    * Fetches everything the Details view shows about the commit with the given full commit id:
    * metadata (ids, refs, author, committer, description), the overall diff statistics, and
    * the changed files with their per-file added/removed line counts. The commit id pins the

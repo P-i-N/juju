@@ -228,6 +228,20 @@
   text-decoration: line-through;
 }
 
+.fileLines {
+  flex-shrink: 0;
+  padding-left: 8px;
+  font-variant-numeric: tabular-nums;
+}
+
+.fileLinesAdded {
+  color: var(--vscode-gitDecoration-addedResourceForeground, #89d185);
+}
+
+.fileLinesRemoved {
+  color: var(--vscode-gitDecoration-deletedResourceForeground, #c74e39);
+}
+
 .fileStatus {
   flex-shrink: 0;
   min-width: 1.2em;

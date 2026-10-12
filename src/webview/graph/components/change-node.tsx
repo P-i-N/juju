@@ -940,6 +940,16 @@ Double-click to open diff`}
       <span class={styles.fileName} data-role="file-name">
         {fileNameOf(file.path)}
       </span>
+      {file.linesAdded !== undefined && file.linesAdded > 0 && (
+        <span class={cx(styles.fileLines, styles.fileLinesAdded)} data-role="file-lines-added">
+          +{file.linesAdded}
+        </span>
+      )}
+      {file.linesRemoved !== undefined && file.linesRemoved > 0 && (
+        <span class={cx(styles.fileLines, styles.fileLinesRemoved)} data-role="file-lines-removed">
+          -{file.linesRemoved}
+        </span>
+      )}
       <span class={styles.fileStatus} data-role="file-status">
         {file.type}
         {file.conflict ? "!" : ""}

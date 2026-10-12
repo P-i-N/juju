@@ -776,14 +776,26 @@ export class JJGraphWebview implements vscode.WebviewViewProvider {
       case "fetchChangedFiles": {
         let files: ChangedFile[] | null = null;
         try {
-          files = (await repo.getChangedFiles(message.commitId)).map((f) => ({
-            type: f.type,
-            path: toForwardSlashes(repositoryRelativePath(repo.repositoryRoot, f.path)),
-            ...(f.renamedFrom
-              ? { renamedFrom: toForwardSlashes(repositoryRelativePath(repo.repositoryRoot, f.renamedFrom)) }
-              : {}),
-            conflict: f.isConflict ?? f.type === "X",
-          }));
+          const [changedFiles, lineCounts] = await Promise.all([
+            repo.getChangedFiles(message.commitId),
+            repo.getChangedFileLineCounts(message.commitId).catch((error: unknown) => {
+              logger.warn(`Failed to load line counts: ${error instanceof Error ? error.message : String(error)}`);
+              return new Map<string, { added: number; removed: number }>();
+            }),
+          ]);
+          files = changedFiles.map((f) => {
+            const relativePath = toForwardSlashes(repositoryRelativePath(repo.repositoryRoot, f.path));
+            const counts = lineCounts.get(relativePath);
+            return {
+              type: f.type,
+              path: relativePath,
+              ...(f.renamedFrom
+                ? { renamedFrom: toForwardSlashes(repositoryRelativePath(repo.repositoryRoot, f.renamedFrom)) }
+                : {}),
+              conflict: f.isConflict ?? f.type === "X",
+              ...(counts ? { linesAdded: counts.added, linesRemoved: counts.removed } : {}),
+            };
+          });
         } catch (error: unknown) {
           logger.warn(`Failed to load changed files: ${error instanceof Error ? error.message : String(error)}`);
         }

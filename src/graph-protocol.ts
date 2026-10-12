@@ -18,6 +18,8 @@ export interface ChangedFile {
   path: string;
   renamedFrom?: string;
   conflict: boolean;
+  linesAdded?: number;
+  linesRemoved?: number;
 }
 
 interface ChangeNodeBase {
