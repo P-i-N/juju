@@ -157,6 +157,7 @@ export interface LogEntry {
   local_tags: LogEntryLocalRef[];
   remote_tags: LogEntryRemoteRef[];
   working_copies: string[];
+  elided_ids?: string[];
   diff_files?: DiffFileEntry[] | null;
   conflicted_files?: string[] | null;
   tracked_files?: string[] | null;

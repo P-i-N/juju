@@ -214,6 +214,9 @@ export function ChangeNodeRow({ change, index, nodeData, changeIdRef, compact }:
 
   const handleDoubleClick = (e: MouseEvent) => {
     if (change.branchType === "~") {
+      if (change.hiddenCount) {
+        postMessage({ command: "expandElided", fakeId: change.fakeId });
+      }
       return;
     }
     const side = (e.ctrlKey || e.metaKey) && insertSideAt(change, e, rowZones);
@@ -326,7 +329,7 @@ export function ChangeNodeRow({ change, index, nodeData, changeIdRef, compact }:
           )}
         </div>
         {change.branchType === "~" ? (
-          <ElidedTextContent graphW={graphW} />
+          <ElidedTextContent graphW={graphW} hiddenCount={change.hiddenCount} />
         ) : (
           <MemoizedChangeNodeTextContent
             change={change}
@@ -405,7 +408,13 @@ function ChangeNodeClass({
   );
 }
 
-const ElidedTextContent = memo(function ElidedTextContent({ graphW }: { graphW: number }) {
+const ElidedTextContent = memo(function ElidedTextContent({
+  graphW,
+  hiddenCount,
+}: {
+  graphW: number;
+  hiddenCount: number | undefined;
+}) {
   const style = graphStyle.value;
   return (
     <div
@@ -416,7 +425,13 @@ const ElidedTextContent = memo(function ElidedTextContent({ graphW }: { graphW: 
         "--change-id-right-padding": `${CHANGE_ID_RIGHT_PADDING}px`,
       }}
     >
-      <div></div>
+      <div>
+        {hiddenCount ? (
+          <span class={styles.elidedCount} title="Double-click to show these commits">
+            {hiddenCount} {hiddenCount === 1 ? "commit" : "commits"} hidden
+          </span>
+        ) : null}
+      </div>
       {style !== "compact" && <div class={styles.description}></div>}
     </div>
   );

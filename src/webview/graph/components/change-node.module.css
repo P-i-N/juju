@@ -133,6 +133,14 @@
 
 .changeNode.elidedNode .textContent {
   height: 20px;
+  justify-content: center;
+}
+
+.elidedCount {
+  padding-left: 4px;
+  font-size: 0.85em;
+  opacity: 0.6;
+  user-select: none;
 }
 
 .changeNode.compactMode {
@@ -211,6 +219,7 @@
 }
 
 .fileGroupHeader {
+  --file-indent: 4px;
   font-size: 0.85em;
   line-height: 1.6;
   opacity: 0.7;

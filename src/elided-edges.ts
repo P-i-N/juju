@@ -14,6 +14,7 @@ interface SyntheticNode {
   id: string;
   targetId: string;
   edgeType: GraphEdgeType;
+  hiddenIds?: string[];
 }
 
 function getUniqueEntryId(entry: LogEntry): string {
@@ -35,6 +36,7 @@ function buildAncestryInfo(
   entries: LogEntry[],
   elideImmutableCommits: boolean,
   immutableParentDepth: number,
+  forceVisibleIds: ReadonlySet<string>,
 ): AncestryInfo {
   const visibleIds = new Set<string>();
   const parentMap = new Map<string, string[]>();
@@ -53,6 +55,7 @@ function buildAncestryInfo(
     }
 
     const isVisible =
+      forceVisibleIds.has(id) ||
       entry.current_working_copy ||
       entry.working_copies.length > 0 ||
       (elideImmutableCommits ? !entry.immutable : true) ||
@@ -129,6 +132,7 @@ function buildAncestryInfo(
 interface ClassifyEdgesOptions {
   elideImmutableCommits?: boolean;
   elidedVisibleImmutableParents?: number;
+  forceVisibleIds?: ReadonlySet<string>;
 }
 
 export function classifyEdges(
@@ -147,6 +151,7 @@ export function classifyEdges(
     entries,
     elideImmutableCommits,
     immutableParentDepth,
+    options?.forceVisibleIds ?? new Set(),
   );
 
   const externalEdgesCache = new Map<string, ClassifiedEdge[]>();
@@ -414,12 +419,75 @@ function syntheticNodeId(sourceId: string, targetId: string): string {
   return `~${sourceId}~${targetId}`;
 }
 
+// Collects the hidden entries reachable from startIds through hidden entries only.
+// With a target, only those that lead to the visible target are collected.
+function collectHiddenBehind(
+  startIds: string[],
+  targetId: string | null,
+  visibleIds: Set<string>,
+  parentMap: Map<string, string[]>,
+): string[] {
+  const isHidden = (id: string) => !visibleIds.has(id) && parentMap.has(id);
+
+  const reached = new Set<string>();
+  const stack = startIds.filter(isHidden);
+  while (stack.length > 0) {
+    const id = stack.pop()!;
+    if (reached.has(id)) {
+      continue;
+    }
+    reached.add(id);
+    for (const parentId of parentMap.get(id)!) {
+      if (isHidden(parentId)) {
+        stack.push(parentId);
+      }
+    }
+  }
+
+  if (targetId === null) {
+    return [...reached];
+  }
+
+  const children = new Map<string, string[]>();
+  const leading = new Set<string>();
+  for (const id of reached) {
+    for (const parentId of parentMap.get(id)!) {
+      if (parentId === targetId) {
+        leading.add(id);
+      } else if (reached.has(parentId)) {
+        let list = children.get(parentId);
+        if (!list) {
+          list = [];
+          children.set(parentId, list);
+        }
+        list.push(id);
+      }
+    }
+  }
+
+  const queue = [...leading];
+  for (let i = 0; i < queue.length; i++) {
+    for (const child of children.get(queue[i]) ?? []) {
+      if (!leading.has(child)) {
+        leading.add(child);
+        queue.push(child);
+      }
+    }
+  }
+  return [...leading];
+}
+
 export function insertSyntheticNodes(
   entries: LogEntry[],
   edges: Map<string, ClassifiedEdge[]>,
   visibleIds: Set<string>,
   reachableVisibleFrom: Map<string, string>,
 ): LogEntry[] {
+  const parentMap = new Map<string, string[]>();
+  for (const entry of entries) {
+    parentMap.set(getUniqueEntryId(entry), entry.parents.map(getParentUniqueId));
+  }
+
   const syntheticNodes = new Map<string, SyntheticNode>();
   for (const [id, classifiedEdges] of edges.entries()) {
     if (!visibleIds.has(id)) {
@@ -433,6 +501,7 @@ export function insertSyntheticNodes(
           id: synthId,
           targetId: reachableVisible || edge.targetId,
           edgeType: reachableVisible ? "indirect" : "missing",
+          hiddenIds: collectHiddenBehind([edge.targetId], reachableVisible, visibleIds, parentMap),
         });
       }
     }
@@ -484,6 +553,7 @@ export function insertSyntheticNodes(
           id: syntheticNodeId(entryId, edge.targetId),
           targetId: edge.targetId,
           edgeType: "indirect",
+          hiddenIds: collectHiddenBehind(parentMap.get(entryId) ?? [], edge.targetId, visibleIds, parentMap),
         });
       } else if (!visibleIds.has(edge.targetId)) {
         const synthNode = syntheticNodes.get(edge.targetId);
@@ -536,6 +606,7 @@ function createSyntheticEntry(node: SyntheticNode): LogEntry {
     local_tags: [],
     remote_tags: [],
     working_copies: [],
+    ...(node.hiddenIds?.length ? { elided_ids: node.hiddenIds } : {}),
   };
 }
 

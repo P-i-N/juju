@@ -440,6 +440,85 @@ describe("elidedEdges", () => {
       assert.strictEqual(synthNode.parents.length, 0);
     });
 
+    it("counts the hidden commits behind an indirect synthetic node", () => {
+      const entries: LogEntry[] = [
+        createEntry("A", [parentRef("H1")]),
+        createEntry("H1", [parentRef("H2")], { immutable: true }),
+        createEntry("H2", [parentRef("H3")], { immutable: true }),
+        createEntry("H3", [parentRef("B")], { immutable: true }),
+        createEntry("B", [], { immutable: true, local_bookmarks: [{ name: "main", synced: true, conflict: false }] }),
+      ];
+
+      const { edges, visibleIds, reachableVisibleFrom } = classifyEdges(entries, { elidedVisibleImmutableParents: 0 });
+      const result = insertSyntheticNodes(entries, edges, visibleIds, reachableVisibleFrom);
+
+      assert.deepStrictEqual(
+        result.map((e) => e.change_id),
+        ["A", "~A~B", "B"],
+      );
+      assert.deepStrictEqual([...result[1].elided_ids!].sort(), ["H1", "H2", "H3"]);
+    });
+
+    it("counts only the hidden commits on the path to the visible target", () => {
+      const entries: LogEntry[] = [
+        createEntry("A", [parentRef("H1")]),
+        createEntry("H1", [parentRef("B")], { immutable: true }),
+        createEntry("Side", [parentRef("B")], { immutable: true }),
+        createEntry("B", [], { immutable: true, local_bookmarks: [{ name: "main", synced: true, conflict: false }] }),
+      ];
+
+      const { edges, visibleIds, reachableVisibleFrom } = classifyEdges(entries, { elidedVisibleImmutableParents: 0 });
+      const result = insertSyntheticNodes(entries, edges, visibleIds, reachableVisibleFrom);
+
+      assert.deepStrictEqual(result.find((e) => e.change_id === "~A~B")?.elided_ids, ["H1"]);
+    });
+
+    it("counts the loaded history behind a trailing synthetic node", () => {
+      const entries: LogEntry[] = [
+        createEntry("A", [parentRef("H1")]),
+        createEntry("H1", [parentRef("H2")], { immutable: true }),
+        createEntry("H2", [parentRef("Unloaded")], { immutable: true }),
+      ];
+
+      const { edges, visibleIds, reachableVisibleFrom } = classifyEdges(entries, { elidedVisibleImmutableParents: 0 });
+      const result = insertSyntheticNodes(entries, edges, visibleIds, reachableVisibleFrom);
+
+      assert.deepStrictEqual(result.find((e) => e.change_id === "~H1")?.elided_ids?.sort(), ["H1", "H2"]);
+    });
+
+    it("expands only the synthetic node whose commits are forced visible", () => {
+      const bookmark = [{ name: "main", synced: true, conflict: false }];
+      const entries: LogEntry[] = [
+        createEntry("A", [parentRef("H1"), parentRef("G1")]),
+        createEntry("H1", [parentRef("B")], { immutable: true }),
+        createEntry("G1", [parentRef("C")], { immutable: true }),
+        createEntry("B", [], { immutable: true, local_bookmarks: bookmark }),
+        createEntry("C", [], { immutable: true, local_bookmarks: bookmark }),
+      ];
+
+      const { edges, visibleIds, reachableVisibleFrom } = classifyEdges(entries, {
+        elidedVisibleImmutableParents: 0,
+        forceVisibleIds: new Set(["H1"]),
+      });
+      const result = insertSyntheticNodes(entries, edges, visibleIds, reachableVisibleFrom);
+
+      const ids = result.map((e) => e.change_id);
+      assert.ok(ids.includes("H1"), "H1 should be shown");
+      assert.ok(!ids.includes("G1"), "G1 should stay hidden");
+      assert.ok(ids.includes("~A~C"), "the other synthetic node should remain");
+      assert.ok(!ids.includes("~A~B"), "the expanded synthetic node should be gone");
+    });
+
+    it("leaves the count unset when nothing loaded is hidden", () => {
+      const entries: LogEntry[] = [createEntry("A", [parentRef("X")])];
+
+      const { edges, visibleIds, reachableVisibleFrom } = classifyEdges(entries);
+      const result = insertSyntheticNodes(entries, edges, visibleIds, reachableVisibleFrom);
+
+      assert.strictEqual(result[1].change_id, "~X");
+      assert.strictEqual(result[1].elided_ids, undefined);
+    });
+
     it("inserts synthetic node with parent for indirect edge", () => {
       const entries: LogEntry[] = [
         createEntry("A", [parentRef("Y")]),

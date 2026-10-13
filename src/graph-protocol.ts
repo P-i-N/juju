@@ -40,6 +40,9 @@ export interface ElidedChangeNode extends ChangeNodeBase {
   // A unique ID for each elided node.
   fakeId: string;
   branchType: "~";
+  // Number of loaded commits hidden behind this node. Absent when nothing
+  // loaded is hidden, e.g. when the history continues beyond the log limit.
+  hiddenCount?: number;
 }
 
 export interface RegularChangeNode extends ChangeNodeBase {
@@ -153,6 +156,7 @@ export type WebviewToExtensionMessage =
   | { command: "newChildChange"; changeIds: FullChangeId[] }
   | { command: "insertNewChange"; changeId: FullChangeId; position: "after" | "before" }
   | { command: "selectChange"; selectedNodes: FullChangeId[] }
+  | { command: "expandElided"; fakeId: string }
   | { command: "openDetailsView" }
   | { command: "showChangeDetails"; changeId: FullChangeId }
   | { command: "moveBookmark"; bookmark: string; targetChangeId: FullChangeId }

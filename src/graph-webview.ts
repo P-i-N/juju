@@ -66,6 +66,8 @@ export class JJGraphWebview implements vscode.WebviewViewProvider {
   private currentChanges: ChangeNode[] = [];
   private changesById = new Map<FullChangeId, RegularChangeNode>();
   private elideOverride: boolean | null = null;
+  private expandedCommitIds = new Set<string>();
+  private elidedIdsByFakeId = new Map<string, string[]>();
   private readonly splitWebview: SplitWebview;
   private lastFiredSelection: GraphSelection[] = [];
 
@@ -278,6 +280,16 @@ export class JJGraphWebview implements vscode.WebviewViewProvider {
       case "insertNewChange":
         await this.withRefresh("insert new change", () => repo.newAtRetryImmutable(message.changeId, message.position));
         break;
+      case "expandElided": {
+        const hiddenIds = this.elidedIdsByFakeId.get(message.fakeId);
+        if (hiddenIds) {
+          for (const id of hiddenIds) {
+            this.expandedCommitIds.add(id);
+          }
+          await this.rerender();
+        }
+        break;
+      }
       case "selectChange": {
         // Elided ("~") nodes can never be selected.
         const selectedIds = message.selectedNodes.filter((id) => this.findRegularChange(id));
@@ -1145,6 +1157,7 @@ export class JJGraphWebview implements vscode.WebviewViewProvider {
 
   public async enableElideImmutableCommits(): Promise<void> {
     this.elideOverride = true;
+    this.expandedCommitIds.clear();
     await this.updateElidingContext();
     await this.rerender();
   }
@@ -1157,6 +1170,7 @@ export class JJGraphWebview implements vscode.WebviewViewProvider {
 
   public async resetElideOverride(): Promise<void> {
     this.elideOverride = null;
+    this.expandedCommitIds.clear();
     await this.updateElidingContext();
   }
 
@@ -1225,9 +1239,13 @@ export class JJGraphWebview implements vscode.WebviewViewProvider {
       const elideImmutableCommits = this.getEffectiveEliding();
       const { edges, visibleIds, reachableVisibleFrom } = classifyEdges(rawEntries, {
         elideImmutableCommits,
+        forceVisibleIds: this.expandedCommitIds,
         elidedVisibleImmutableParents: getElidedVisibleImmutableParents(repository.repositoryRoot),
       });
       const entriesWithSynthetics = insertSyntheticNodes(rawEntries, edges, visibleIds, reachableVisibleFrom);
+      this.elidedIdsByFakeId = new Map(
+        entriesWithSynthetics.flatMap((e) => (e.elided_ids ? [[e.change_id, e.elided_ids] as const] : [])),
+      );
       const { changes, maxPrefixLength, offsetWidth } = parseJJLogJson(entriesWithSynthetics, graphStyle);
       this.currentChanges = changes;
       this.changesById = new Map(
@@ -1428,6 +1446,7 @@ function parseJJLogJson(
         fakeId: entryUniqueId,
         parentChangeIds: uniqueParentIds,
         branchType: "~" as const,
+        ...(entry.elided_ids ? { hiddenCount: entry.elided_ids.length } : {}),
       };
     }
 
