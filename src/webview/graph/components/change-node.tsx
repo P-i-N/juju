@@ -295,6 +295,7 @@ export function ChangeNodeRow({ change, index, nodeData, changeIdRef, compact }:
       <ChangeNodeClass
         changeId={changeUniqueId}
         currentWorkingCopy={change.branchType !== "~" && change.currentWorkingCopy}
+        conflicted={change.branchType !== "~" && change.conflict}
         isElided={isElided}
         selected={isSelected}
         edgeTop={edgeTop}
@@ -355,6 +356,7 @@ export function ChangeNodeRow({ change, index, nodeData, changeIdRef, compact }:
 function ChangeNodeClass({
   changeId,
   currentWorkingCopy,
+  conflicted,
   isElided,
   selected,
   edgeTop,
@@ -366,6 +368,7 @@ function ChangeNodeClass({
 }: {
   changeId: string;
   currentWorkingCopy: boolean;
+  conflicted: boolean;
   isElided: boolean;
   selected: ReadonlySignal<boolean>;
   edgeTop: ReadonlySignal<boolean>;
@@ -379,6 +382,7 @@ function ChangeNodeClass({
       class={cx(
         styles.changeNode,
         currentWorkingCopy && styles.workingCopy,
+        conflicted && styles.conflicted,
         isElided && styles.elidedNode,
         selected.value && styles.selected,
         visibleDropTargetId.value === changeId && styles.dropTarget,
@@ -390,6 +394,7 @@ function ChangeNodeClass({
         modeClasses,
       )}
       data-selected={selected.value ? "" : undefined}
+      data-conflicted={conflicted ? "" : undefined}
       data-edge-top={edgeTop.value ? "" : undefined}
       data-edge-bottom={edgeBottom.value ? "" : undefined}
       data-edge-cursor={edgeCursor.value ?? undefined}
@@ -1008,6 +1013,10 @@ Double-click to open diff`}
           return;
         }
         selectOnly();
+        if (file.conflict) {
+          postMessage({ command: "openMergeEditor", changeId: change.id.changeId, path: file.path });
+          return;
+        }
         postMessage({
           command: "openFileDiff",
           changeId: change.id.changeId,
@@ -1106,7 +1115,7 @@ function FileRow({
       class={cx(styles.fileRow, grouped && styles.groupedFileRow, selected && styles.selected, edgeClass)}
       style={fileRowStyle(graphW)}
       title={`${file.path}
-Double-click to open diff`}
+Double-click to ${file.conflict ? "resolve conflict" : "open diff"}`}
       data-role="changed-file"
       data-file-of={change.id.changeId}
       data-path={file.path}
@@ -1135,6 +1144,10 @@ Double-click to open diff`}
         }
         selectedHunks.value = null;
         selectedFiles.value = { changeId: change.id.changeId, paths: new Set([file.path]), anchor: file.path };
+        if (file.conflict) {
+          postMessage({ command: "openMergeEditor", changeId: change.id.changeId, path: file.path });
+          return;
+        }
         postMessage({
           command: "openFileDiff",
           changeId: change.id.changeId,

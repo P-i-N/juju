@@ -1149,11 +1149,17 @@ function getResourceStateCommand(
   changeId?: FullChangeId | "@",
   isWorkingCopyConflicted = false,
 ): vscode.Command {
-  // Resolving conflicts only makes sense in the working copy, but a file listed under a
-  // parent group may still be conflicted in the working copy. For usability, clicking
-  // a conflicted file in a parent group opens the merge editor if it's still conflicted
-  // in the working copy.
+  // A file conflicted in a change other than the working copy opens the merge editor for that
+  // change, so the conflict can be resolved without editing the change. A file that is only
+  // conflicted in the working copy opens the working-copy merge editor.
   const fallback = computeFallbackCommand(fileStatus, beforeUri, afterUri, toRev, fileClickAction, workingCopyUri);
+  if (changeId !== undefined && isConflicted) {
+    return {
+      title: "Resolve Conflict",
+      command: "jj.openMergeEditor",
+      arguments: [workingCopyUri, changeId],
+    };
+  }
   if (changeId === undefined || isWorkingCopyConflicted) {
     return {
       title: isConflicted || isWorkingCopyConflicted ? "Resolve Conflict" : fallback.title,

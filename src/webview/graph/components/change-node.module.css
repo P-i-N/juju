@@ -12,6 +12,14 @@
   background-color: var(--vscode-list-hoverBackground);
 }
 
+.changeNode.conflicted {
+  background-color: color-mix(in srgb, var(--vscode-errorForeground, #f48771) 18%, transparent);
+}
+
+.changeNode.conflicted:hover {
+  background-color: color-mix(in srgb, var(--vscode-errorForeground, #f48771) 28%, transparent);
+}
+
 .changeNode.selected {
   background-color: var(--vscode-list-activeSelectionBackground);
   color: var(--vscode-list-activeSelectionForeground);

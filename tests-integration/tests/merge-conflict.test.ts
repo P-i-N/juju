@@ -1,4 +1,5 @@
 import { test, expect, waitForSCMView, mod, runCommand } from "./base-test";
+import type { TestRepo } from "../test-repo";
 
 test("resolve merge conflict in merge editor", async ({ graphFrame, testRepo, workbox }) => {
   await testRepo.writeFile("file1.txt", "A");
@@ -111,7 +112,9 @@ async function sectionFileBadges(
   }, sectionLabel);
 }
 
-test("selecting a conflicted non-parent change shows conflict status", async ({ graphFrame, testRepo, workbox }) => {
+// Creates a change that adds conflict.txt with a conflict, two changes behind the working
+// copy, and returns its change ID.
+async function createConflictedChangeBehindWorkingCopy(testRepo: TestRepo): Promise<string> {
   // Two sibling branches each add conflict.txt with different content, so
   // merging them produces a conflict.
   const baseChange = await testRepo.commitFile("base.txt", "base", "Base commit");
@@ -139,6 +142,15 @@ test("selecting a conflicted non-parent change shows conflict status", async ({ 
   // neither the working copy nor one of its parents.
   await testRepo.jjCommand(["new"]);
   await testRepo.jjCommand(["new"]);
+  return conflictedChangeId;
+}
+
+test("resolves a conflict in a non-working-copy change without editing it", async ({
+  graphFrame,
+  testRepo,
+  workbox,
+}) => {
+  const conflictedChangeId = await createConflictedChangeBehindWorkingCopy(testRepo);
 
   const nodes = graphFrame.locator("#nodes > div");
   await expect(nodes).toHaveCount(8); // @, empty, conflicted change, merge, B, C, base, root
@@ -158,24 +170,86 @@ test("selecting a conflicted non-parent change shows conflict status", async ({ 
     expect(await sectionFileBadges(workbox, "Selected Commit")).toEqual({ "conflict.txt": "A!" });
   }).toPass();
 
-  // Clicking the conflicted file performs the standard click action (a diff), not
-  // the merge editor: resolving conflicts only makes sense in the working copy.
+  const workingCopyChangeId = (await testRepo.log("@"))[0].change_id;
+
+  // Clicking the conflicted file opens the merge editor for the selected change, without
+  // editing it.
   const conflictItem = scmView.getByRole("treeitem", { name: /conflict\.txt/ }).last();
   await conflictItem.click();
 
-  // The merge editor never opens; instead a diff editor shows the added file with
-  // its materialized conflict content (both sides of the merge) on the right.
-  await expect(workbox.locator('.monaco-editor[role="code"][data-uri*="left_conflict.txt"]')).toBeHidden();
-  await expect(workbox.locator('.monaco-editor[role="code"][data-uri*="right_conflict.txt"]')).toBeHidden();
+  const mergeEditorLeft = workbox.locator('.monaco-editor[role="code"][data-uri*="left_conflict.txt"]');
+  const mergeEditorRight = workbox.locator('.monaco-editor[role="code"][data-uri*="right_conflict.txt"]');
+  await expect(mergeEditorLeft.locator(".view-line")).toContainText("B");
+  await expect(mergeEditorRight.locator(".view-line")).toContainText("C");
 
-  const diffEditor = workbox.locator(".editor-instance");
-  await expect(diffEditor).toBeVisible();
-  const originalPane = diffEditor.locator(".editor.original .view-lines");
-  const modifiedPane = diffEditor.locator(".editor.modified .view-lines");
-  // The file is added in this change, so the original side is empty and the modified
-  // side shows the file at the selected revision: jj's materialized conflict markers
-  // containing both sides of the merge ("+B" and "C").
-  await expect(originalPane).toHaveText(/^\s*$/);
-  await expect(modifiedPane.getByText("+B", { exact: true }).first()).toBeVisible();
-  await expect(modifiedPane.getByText("C", { exact: true }).first()).toBeVisible();
+  // The result is jj's merge output file, not the working-copy file.
+  const mergeEditorOutput = workbox.locator('.monaco-editor[role="code"][data-uri*="output_conflict.txt"]');
+  await mergeEditorOutput.click();
+  await workbox.keyboard.press(`${mod}+a`);
+  await workbox.keyboard.type("Merged");
+  await workbox.keyboard.press(`${mod}+s`);
+  await expect(workbox.locator(".tab.active")).not.toHaveClass(/dirty/);
+
+  await runCommand(workbox, "View: Close All Editors");
+  await expect(mergeEditorOutput).toBeHidden();
+
+  // Closing the merge editor writes the result into the conflicted change and rebases its
+  // descendants, which resolves the propagated conflicts. The working copy stays in place.
+  await expect(async () => {
+    const log = await testRepo.log(conflictedChangeId);
+    expect(log[0].conflict).toBe(false);
+  }).toPass();
+  const workingCopy = (await testRepo.log("@"))[0];
+  expect(workingCopy.change_id).toBe(workingCopyChangeId);
+  expect(workingCopy.conflict).toBe(false);
+  const resolved = await testRepo.jjCommand(["file", "show", "-r", conflictedChangeId, "conflict.txt"]);
+  expect(resolved.stdout.trim()).toBe("Merged");
+});
+
+test("double-clicking a conflicted file in the graph opens the merge editor for that change", async ({
+  graphFrame,
+  testRepo,
+  workbox,
+}) => {
+  const conflictedChangeId = await createConflictedChangeBehindWorkingCopy(testRepo);
+  const workingCopyChangeId = (await testRepo.log("@"))[0].change_id;
+
+  const conflictedNode = graphFrame.locator(`#nodes > div[data-change-id^="${conflictedChangeId}/"]`);
+  await expect(conflictedNode).toHaveAttribute("data-conflicted", "");
+  await expect(conflictedNode).not.toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+  await conflictedNode.locator('[data-role="files-toggle"]').click();
+  const fileRow = graphFrame.locator(
+    `#nodes > [data-role="changed-file"][data-file-of^="${conflictedChangeId}/"][data-path="conflict.txt"]`,
+  );
+  await expect(fileRow).toHaveAttribute("data-conflict", "");
+  await fileRow.dblclick();
+
+  const mergeEditorLeft = workbox.locator('.monaco-editor[role="code"][data-uri*="left_conflict.txt"]');
+  const mergeEditorRight = workbox.locator('.monaco-editor[role="code"][data-uri*="right_conflict.txt"]');
+  await expect(mergeEditorLeft.locator(".view-line")).toContainText("B");
+  await expect(mergeEditorRight.locator(".view-line")).toContainText("C");
+  const mergeEditorOutput = workbox.locator('.monaco-editor[role="code"][data-uri*="output_conflict.txt"]');
+  await expect(mergeEditorOutput).toBeVisible();
+
+  // Closing the merge editor without a result leaves the change conflicted.
+  await runCommand(workbox, "View: Close All Editors");
+  await workbox.getByRole("button", { name: "Don't Save" }).click();
+  await expect(mergeEditorOutput).toBeHidden();
+  expect((await testRepo.log(conflictedChangeId))[0].conflict).toBe(true);
+
+  // Opening it again and saving a result resolves the change.
+  await fileRow.dblclick();
+  await mergeEditorOutput.click();
+  await workbox.keyboard.press(`${mod}+a`);
+  await workbox.keyboard.type("Merged");
+  await workbox.keyboard.press(`${mod}+s`);
+  await expect(workbox.locator(".tab.active")).not.toHaveClass(/dirty/);
+  await runCommand(workbox, "View: Close All Editors");
+
+  await expect(async () => {
+    const log = await testRepo.log(conflictedChangeId);
+    expect(log[0].conflict).toBe(false);
+  }).toPass();
+  expect((await testRepo.log("@"))[0].change_id).toBe(workingCopyChangeId);
+  await expect(conflictedNode).not.toHaveAttribute("data-conflicted");
 });

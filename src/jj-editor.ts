@@ -20,6 +20,10 @@ interface MergeEditorRequest {
   right: string;
   output: string;
   realPath: string;
+  // When set, the merge result is written to jj's output file rather than the working-copy
+  // file, and the tool waits for the merge editor to close so jj can apply the result to the
+  // change being resolved.
+  wait?: boolean;
 }
 
 interface MergeEditorTabInput {
@@ -304,7 +308,8 @@ export class JJMergeEditor implements IIPCHandler {
   }
 
   async handle(request: MergeEditorRequest): Promise<boolean> {
-    const outputUri = toWorkspaceUri(request.realPath);
+    const realUri = toWorkspaceUri(request.realPath);
+    const outputUri = request.wait ? toWorkspaceUri(request.output) : realUri;
 
     const leftBasename = path.basename(request.left);
     const baseBasename = path.basename(request.base);
@@ -340,7 +345,7 @@ export class JJMergeEditor implements IIPCHandler {
         const desc = labels.left.description.split("\n")[0] || "(no description)";
         input1 = {
           uri: leftCopyUri,
-          title: resolveConflictSideTitle(this.getExtensionState(), outputUri, labels.left),
+          title: resolveConflictSideTitle(this.getExtensionState(), realUri, labels.left),
           description: desc,
           detail: `commit ${labels.left.commitIdShort}`,
         };
@@ -349,7 +354,7 @@ export class JJMergeEditor implements IIPCHandler {
         const desc = labels.right.description.split("\n")[0] || "(no description)";
         input2 = {
           uri: rightCopyUri,
-          title: resolveConflictSideTitle(this.getExtensionState(), outputUri, labels.right),
+          title: resolveConflictSideTitle(this.getExtensionState(), realUri, labels.right),
           description: desc,
           detail: `commit ${labels.right.commitIdShort}`,
         };
@@ -365,17 +370,24 @@ export class JJMergeEditor implements IIPCHandler {
       output: outputUri,
     });
 
-    const onDidClose = window.tabGroups.onDidChangeTabs((tabs) => {
-      for (const t of tabs.closed) {
-        const input = t.input as MergeEditorTabInput | undefined;
-        const resultUri = input?.result?.toString();
-        if (resultUri === outputUri.toString()) {
-          onDidClose.dispose();
-          fs.rm(tempDir, { recursive: true }).catch(() => {});
-          return;
+    const closed = new Promise<void>((resolve) => {
+      const onDidClose = window.tabGroups.onDidChangeTabs((tabs) => {
+        for (const t of tabs.closed) {
+          const input = t.input as MergeEditorTabInput | undefined;
+          const resultUri = input?.result?.toString();
+          if (resultUri === outputUri.toString()) {
+            onDidClose.dispose();
+            fs.rm(tempDir, { recursive: true }).catch(() => {});
+            resolve();
+            return;
+          }
         }
-      }
+      });
     });
+
+    if (request.wait) {
+      await closed;
+    }
 
     return true;
   }

@@ -581,6 +581,12 @@ export function registerPreInitCommands(state: ExtensionState): void {
     }
     const fsPath = resolveRepositoryPath(uri.fsPath);
     const relativePath = repositoryRelativePath(repo.repositoryRoot, fsPath);
+    const workingCopyChangeId =
+      state.workspaceSCM.getRepositorySourceControlManagerFromUri(uri)?.status?.workingCopy.changeId.changeId;
+    // Conflicts in the working copy are resolved by editing the working-copy file directly.
+    // Any other change is resolved in place: jj waits for the merge editor to close and then
+    // writes the result into that change, rebasing its descendants.
+    const waitForResult = changeId !== undefined && changeId !== "@" && changeId !== workingCopyChangeId;
     const args = ["resolve", "--tool=jjx-vscode-merge", ...configs.flatMap((c) => ["--config", c])];
     if (changeId) {
       args.push("-r", changeId);
@@ -590,15 +596,20 @@ export function registerPreInitCommands(state: ExtensionState): void {
       await handleJJCommand(
         repo.spawnJJ(args, {
           cwd: repo.repositoryRoot,
-          env: { JJX_MERGE_REAL_PATH: fsPath },
+          env: { JJX_MERGE_REAL_PATH: fsPath, ...(waitForResult ? { JJX_MERGE_WAIT: "1" } : {}) },
+          ...(waitForResult ? { timeout: 0 } : {}),
         }),
       );
+      if (waitForResult) {
+        await state.throttledPoll?.("force");
+      }
     } catch (e) {
       const stderr = e instanceof Error ? ((e as { stderr?: string }).stderr ?? e.message) : String(e);
       if (typeof stderr === "string" && stderr.includes("unchanged")) {
         // This error is expected behavior due to the way we implement the merge editor.
-        // The merge tool only copies out the files and exits immediately.
-        // jj is expected to always return an error like this:
+        // For the working copy, the merge tool only copies out the files and exits immediately.
+        // For other changes, it means the merge editor was closed without saving a result.
+        // jj is expected to return an error like this:
         //   Error: Failed to resolve conflicts
         //   Caused by: The output file is either unchanged or empty after the editor quit (run with --debug to see the exact invocation).
         return;
@@ -607,6 +618,12 @@ export function registerPreInitCommands(state: ExtensionState): void {
         // `jj resolve` only supports 2-sided conflicts.
         const cause = stderr.match(/Caused by: (.+)/)?.[1];
         const message = cause ?? "The conflict has more than 2 sides. At most 2 sides are supported.";
+        if (waitForResult) {
+          void vscode.window.showWarningMessage(
+            `${message} Please edit the change and resolve the conflict markers manually.`,
+          );
+          return;
+        }
         void vscode.window.showWarningMessage(`${message} Please edit the conflict markers manually.`);
         await vscode.commands.executeCommand("vscode.open", toWorkspaceUri(fsPath), {});
         return;

@@ -21,6 +21,7 @@ export type DetailsWebviewToExtensionMessage =
       currentWorkingCopy: boolean;
       path: string;
     }
+  | { command: "openMergeEditor"; commitId: string; currentWorkingCopy: boolean; path: string }
   | { command: "openFileInWorkingCopy"; path: string }
   | { command: "copyPath"; path: string }
   | { command: "copyRelativePath"; path: string }

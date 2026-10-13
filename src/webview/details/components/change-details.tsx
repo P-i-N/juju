@@ -126,12 +126,21 @@ function ChangedFileRow({ change, file }: { change: ChangeDetails; file: Changed
   return (
     <div
       class="detailsChangedFile"
-      title="Open diff"
+      title={file.conflict ? "Resolve conflict" : "Open diff"}
       data-role="changed-file"
       data-path={file.path}
       data-status={file.type.toLowerCase()}
       data-conflict={file.conflict ? "" : undefined}
       onClick={() => {
+        if (file.conflict) {
+          postMessage({
+            command: "openMergeEditor",
+            commitId: change.commitId,
+            currentWorkingCopy: change.currentWorkingCopy,
+            path: file.path,
+          });
+          return;
+        }
         postMessage({
           command: "openFileDiff",
           commitId: change.commitId,

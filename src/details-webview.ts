@@ -251,6 +251,20 @@ export class DetailsWebview implements vscode.Disposable {
         }
         break;
       }
+      case "openMergeEditor": {
+        if (!repo) {
+          break;
+        }
+        const absPath = joinRepositoryPath(repo.repositoryRoot, message.path);
+        // Not awaited: resolving a change other than the working copy keeps the command
+        // running until the merge editor closes.
+        void vscode.commands.executeCommand(
+          "jj.openMergeEditor",
+          toWorkspaceUri(absPath),
+          message.currentWorkingCopy ? "@" : message.commitId,
+        );
+        break;
+      }
       case "openFileInWorkingCopy": {
         if (!repo) {
           break;

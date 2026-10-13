@@ -915,6 +915,18 @@ export class JJGraphWebview implements vscode.WebviewViewProvider {
         }
         break;
       }
+      case "openMergeEditor": {
+        const absPath = joinRepositoryPath(repo.repositoryRoot, message.path);
+        const node = this.findRegularChange(message.changeId);
+        // Not awaited: resolving a change other than the working copy keeps the command
+        // running until the merge editor closes.
+        void vscode.commands.executeCommand(
+          "jj.openMergeEditor",
+          toWorkspaceUri(absPath),
+          node?.currentWorkingCopy ? "@" : message.changeId,
+        );
+        break;
+      }
       case "openFileInWorkingCopy": {
         const absPath = joinRepositoryPath(repo.repositoryRoot, message.path);
         try {

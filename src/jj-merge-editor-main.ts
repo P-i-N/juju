@@ -19,7 +19,7 @@ function main(argv: string[]): void {
   }
 
   ipcClient
-    .call({ left, base, right, output, realPath })
+    .call({ left, base, right, output, realPath, wait: process.env.JJX_MERGE_WAIT === "1" })
     .then((result) => {
       setTimeout(() => process.exit(result === true ? 0 : 1), 0);
     })

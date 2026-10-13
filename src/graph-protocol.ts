@@ -206,6 +206,7 @@ export type WebviewToExtensionMessage =
       line?: number;
     }
   | { command: "openFileAtRevision"; changeId: FullChangeId; path: string }
+  | { command: "openMergeEditor"; changeId: FullChangeId; path: string }
   | { command: "openFileInWorkingCopy"; path: string }
   | { command: "copyPath"; path: string }
   | { command: "copyRelativePath"; path: string }
