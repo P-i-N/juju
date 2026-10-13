@@ -68,6 +68,8 @@ export interface RegularChangeNode extends ChangeNodeBase {
   conflict: boolean;
   isEmpty: boolean;
   elided?: number;
+  hasChildren?: boolean;
+  collapsedCount?: number;
 }
 
 export type ChangeNode = ElidedChangeNode | RegularChangeNode;
@@ -184,6 +186,8 @@ export type WebviewToExtensionMessage =
   | { command: "deleteRemoteRef"; refType: "bookmark" | "tag"; name: string; remote: string }
   | { command: "restoreRemoteRef"; refType: "bookmark" | "tag"; name: string; remote: string }
   | { command: "describeChange"; changeId: FullChangeId }
+  | { command: "editDescriptionTitle"; changeId: FullChangeId }
+  | { command: "toggleDescendants"; changeId: FullChangeId }
   | { command: "absorbChange"; changeId: FullChangeId }
   | { command: "splitChange"; changeId: FullChangeId }
   | { command: "abandonChange"; changeId: FullChangeId }

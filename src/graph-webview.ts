@@ -27,7 +27,13 @@ import {
   type WebviewToExtensionMessage,
   type ExtensionToWebviewMessage,
 } from "./graph-protocol";
-import { classifyEdges, insertSyntheticNodes, getUniqueEntryId } from "./elided-edges";
+import {
+  classifyEdges,
+  collectCollapsedDescendants,
+  insertSyntheticNodes,
+  getParentUniqueId,
+  getUniqueEntryId,
+} from "./elided-edges";
 import { logger } from "./logger";
 import { currentWorkspaceFromEntries } from "./snapshot-status";
 import { getLogRevset, getElidedVisibleImmutableParents } from "./config";
@@ -68,6 +74,8 @@ export class JJGraphWebview implements vscode.WebviewViewProvider {
   private elideOverride: boolean | null = null;
   private expandedCommitIds = new Set<string>();
   private elidedIdsByFakeId = new Map<string, string[]>();
+  private collapsedIds = new Set<string>();
+  private collapsedDescendants = new Map<string, Set<string>>();
   private readonly splitWebview: SplitWebview;
   private lastFiredSelection: GraphSelection[] = [];
 
@@ -285,6 +293,11 @@ export class JJGraphWebview implements vscode.WebviewViewProvider {
         if (hiddenIds) {
           for (const id of hiddenIds) {
             this.expandedCommitIds.add(id);
+          }
+          for (const [rootId, descendants] of this.collapsedDescendants) {
+            if (hiddenIds.some((id) => descendants.has(id))) {
+              this.collapsedIds.delete(rootId);
+            }
           }
           await this.rerender();
         }
@@ -633,6 +646,35 @@ export class JJGraphWebview implements vscode.WebviewViewProvider {
       case "describeChange":
         await this.withRefresh("describe change", () => repo.describeRetryImmutable(message.changeId));
         break;
+      case "toggleDescendants":
+        if (this.collapsedIds.has(message.changeId)) {
+          this.collapsedIds.delete(message.changeId);
+        } else {
+          this.collapsedIds.add(message.changeId);
+        }
+        await this.rerender();
+        break;
+      case "editDescriptionTitle": {
+        const change = this.findRegularChange(message.changeId);
+        if (!change) {
+          break;
+        }
+        const [title, ...body] = change.fullDescription.split("\n");
+        const newTitle = await vscode.window.showInputBox({
+          title: `Edit Description of ${change.id.changeIdPrefix}${change.id.changeIdSuffix}`,
+          prompt: "Enter the first line of the change description",
+          placeHolder: "Description",
+          value: title,
+          valueSelection: [0, title.length],
+        });
+        if (newTitle === undefined || newTitle === title) {
+          break;
+        }
+        const rest = body.join("\n");
+        const newDescription = rest.trim() ? `${newTitle.trim()}\n${rest}` : newTitle.trim();
+        await this.withRefresh("describe change", () => repo.describeRetryImmutable(message.changeId, newDescription));
+        break;
+      }
       case "absorbChange":
         await this.withRefresh("absorb change", async () => {
           const absorbResult = await repo.absorb(message.changeId);
@@ -1237,9 +1279,14 @@ export class JJGraphWebview implements vscode.WebviewViewProvider {
       const graphStyle = config.get<string>("graphStyle") || "full";
       const showChangedFiles = config.get<boolean>("showChangedFiles") ?? true;
       const elideImmutableCommits = this.getEffectiveEliding();
+      const entryIds = new Set(rawEntries.map(getUniqueEntryId));
+      this.collapsedIds = new Set([...this.collapsedIds].filter((id) => entryIds.has(id)));
+      this.collapsedDescendants = collectCollapsedDescendants(rawEntries, this.collapsedIds);
+      const forceHiddenIds = new Set([...this.collapsedDescendants.values()].flatMap((ids) => [...ids]));
       const { edges, visibleIds, reachableVisibleFrom } = classifyEdges(rawEntries, {
         elideImmutableCommits,
         forceVisibleIds: this.expandedCommitIds,
+        forceHiddenIds,
         elidedVisibleImmutableParents: getElidedVisibleImmutableParents(repository.repositoryRoot),
       });
       const entriesWithSynthetics = insertSyntheticNodes(rawEntries, edges, visibleIds, reachableVisibleFrom);
@@ -1247,6 +1294,17 @@ export class JJGraphWebview implements vscode.WebviewViewProvider {
         entriesWithSynthetics.flatMap((e) => (e.elided_ids ? [[e.change_id, e.elided_ids] as const] : [])),
       );
       const { changes, maxPrefixLength, offsetWidth } = parseJJLogJson(entriesWithSynthetics, graphStyle);
+      const parentIds = new Set(rawEntries.flatMap((e) => e.parents.map(getParentUniqueId)));
+      for (const change of changes) {
+        if (change.branchType === "~") {
+          continue;
+        }
+        change.hasChildren = parentIds.has(change.id.changeId);
+        const collapsed = this.collapsedDescendants.get(change.id.changeId);
+        if (collapsed) {
+          change.collapsedCount = collapsed.size;
+        }
+      }
       this.currentChanges = changes;
       this.changesById = new Map(
         changes.filter((c): c is RegularChangeNode => c.branchType !== "~").map((c) => [c.id.changeId, c]),

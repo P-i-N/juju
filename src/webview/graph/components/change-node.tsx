@@ -339,6 +339,7 @@ export function ChangeNodeRow({ change, index, nodeData, changeIdRef, compact }:
             loadingFiles={filesState === "loading"}
           />
         )}
+        {change.branchType !== "~" && <ChangeActions change={change} />}
       </ChangeNodeClass>
       {change.branchType !== "~" && Array.isArray(filesState) && filesState.length > 0 && (
         <MemoizedChangedFileRows change={change} files={filesState} graphW={graphW} bottomEdge={fileAreaEdge} />
@@ -732,6 +733,58 @@ const MemoizedChangeNodeTextContent = memo(function ChangeNodeTextContent({
     </div>
   );
 });
+
+function ChangeActions({ change }: { change: RegularChangeNode }) {
+  const collapsed = change.collapsedCount !== undefined;
+  const canEditDescription = change.id.changeId !== rootChangeId;
+  if (!change.hasChildren && !collapsed && !canEditDescription) {
+    return null;
+  }
+  return (
+    <div
+      class={cx(styles.actions, collapsed && styles.actionsCollapsed)}
+      data-role="change-actions"
+      onDblClick={(e) => e.stopPropagation()}
+      onMouseDown={(e) => e.stopPropagation()}
+      draggable={false}
+      onDragStart={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+      }}
+    >
+      {canEditDescription && (
+        <span
+          class={cx(styles.actionButton, "codicon", "codicon-edit")}
+          data-role="edit-description"
+          role="button"
+          title="Edit Description"
+          onClick={(e) => {
+            e.stopPropagation();
+            postMessage({ command: "editDescriptionTitle", changeId: change.id.changeId });
+          }}
+        />
+      )}
+      {(change.hasChildren || collapsed) && (
+        <span
+          class={cx(
+            styles.actionButton,
+            styles.descendantsToggle,
+            "codicon",
+            collapsed ? "codicon-eye-closed" : "codicon-eye",
+          )}
+          data-role="toggle-descendants"
+          role="button"
+          aria-pressed={collapsed}
+          title={collapsed ? `Show Descendants (${change.collapsedCount} hidden)` : "Hide Descendants"}
+          onClick={(e) => {
+            e.stopPropagation();
+            postMessage({ command: "toggleDescendants", changeId: change.id.changeId });
+          }}
+        />
+      )}
+    </div>
+  );
+}
 
 function FilesToggle({
   change,

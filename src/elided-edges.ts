@@ -37,6 +37,7 @@ function buildAncestryInfo(
   elideImmutableCommits: boolean,
   immutableParentDepth: number,
   forceVisibleIds: ReadonlySet<string>,
+  forceHiddenIds: ReadonlySet<string>,
 ): AncestryInfo {
   const visibleIds = new Set<string>();
   const parentMap = new Map<string, string[]>();
@@ -52,6 +53,10 @@ function buildAncestryInfo(
 
     if (!entry.immutable) {
       mutableIds.add(id);
+    }
+
+    if (forceHiddenIds.has(id) && !entry.current_working_copy) {
+      continue;
     }
 
     const isVisible =
@@ -77,7 +82,7 @@ function buildAncestryInfo(
       const parents = parentMap.get(id);
       if (parents) {
         for (const pid of parents) {
-          if (allEntryIds.has(pid)) {
+          if (allEntryIds.has(pid) && !forceHiddenIds.has(pid)) {
             visibleIds.add(pid);
             nextLevel.add(pid);
           }
@@ -133,6 +138,7 @@ interface ClassifyEdgesOptions {
   elideImmutableCommits?: boolean;
   elidedVisibleImmutableParents?: number;
   forceVisibleIds?: ReadonlySet<string>;
+  forceHiddenIds?: ReadonlySet<string>;
 }
 
 export function classifyEdges(
@@ -152,6 +158,7 @@ export function classifyEdges(
     elideImmutableCommits,
     immutableParentDepth,
     options?.forceVisibleIds ?? new Set(),
+    options?.forceHiddenIds ?? new Set(),
   );
 
   const externalEdgesCache = new Map<string, ClassifiedEdge[]>();
@@ -608,6 +615,41 @@ function createSyntheticEntry(node: SyntheticNode): LogEntry {
     working_copies: [],
     ...(node.hiddenIds?.length ? { elided_ids: node.hiddenIds } : {}),
   };
+}
+
+export function collectCollapsedDescendants(
+  entries: LogEntry[],
+  collapsedIds: ReadonlySet<string>,
+): Map<string, Set<string>> {
+  const childrenMap = new Map<string, string[]>();
+  for (const entry of entries) {
+    const id = getUniqueEntryId(entry);
+    for (const parent of entry.parents) {
+      const parentId = getParentUniqueId(parent);
+      let children = childrenMap.get(parentId);
+      if (!children) {
+        children = [];
+        childrenMap.set(parentId, children);
+      }
+      children.push(id);
+    }
+  }
+
+  const result = new Map<string, Set<string>>();
+  for (const rootId of collapsedIds) {
+    const descendants = new Set<string>();
+    const stack = [...(childrenMap.get(rootId) ?? [])];
+    while (stack.length > 0) {
+      const id = stack.pop()!;
+      if (descendants.has(id)) {
+        continue;
+      }
+      descendants.add(id);
+      stack.push(...(childrenMap.get(id) ?? []));
+    }
+    result.set(rootId, descendants);
+  }
+  return result;
 }
 
 export { getUniqueEntryId, getParentUniqueId };

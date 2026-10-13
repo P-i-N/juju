@@ -717,8 +717,16 @@ export class JJRepository {
   private async describe(rev: FullChangeId | "@", message?: string, ignoreImmutable = false, sessionId?: string) {
     return (
       await this.jjCommand(
-        ["describe", ...(message ? ["-m", message] : []), rev, ...(ignoreImmutable ? ["--ignore-immutable"] : [])],
-        { timeout: message ? TIMEOUTS.DEFAULT : 0, env: sessionId ? { VSCODE_JJ_SESSION_ID: sessionId } : undefined },
+        [
+          "describe",
+          ...(message !== undefined ? ["-m", message] : []),
+          rev,
+          ...(ignoreImmutable ? ["--ignore-immutable"] : []),
+        ],
+        {
+          timeout: message !== undefined ? TIMEOUTS.DEFAULT : 0,
+          env: sessionId ? { VSCODE_JJ_SESSION_ID: sessionId } : undefined,
+        },
       )
     ).toString();
   }

@@ -1,7 +1,13 @@
 /* eslint-disable @typescript-eslint/no-floating-promises */
 import { describe, it } from "node:test";
 import assert from "node:assert";
-import { classifyEdges, insertSyntheticNodes, getUniqueEntryId, getParentUniqueId } from "../elided-edges";
+import {
+  classifyEdges,
+  collectCollapsedDescendants,
+  insertSyntheticNodes,
+  getUniqueEntryId,
+  getParentUniqueId,
+} from "../elided-edges";
 import type { ClassifiedEdge } from "../elided-edges";
 import type { LogEntry, ParentRef } from "../types";
 
@@ -782,6 +788,42 @@ describe("elidedEdges", () => {
         result.map((e) => e.divergent),
         [true, true, false],
       );
+    });
+  });
+
+  describe("collapsed descendants", () => {
+    it("collects all loaded descendants of a collapsed entry", () => {
+      const entries: LogEntry[] = [
+        createEntry("M", [parentRef("B"), parentRef("X")]),
+        createEntry("B", [parentRef("A")]),
+        createEntry("X", [parentRef("R")]),
+        createEntry("A", [parentRef("R")]),
+        createEntry("R", []),
+      ];
+
+      const result = collectCollapsedDescendants(entries, new Set(["A"]));
+
+      assert.deepStrictEqual([...result.get("A")!].sort(), ["B", "M"]);
+    });
+
+    it("hides descendants but keeps the working copy visible behind an elided node", () => {
+      const entries: LogEntry[] = [
+        createEntry("D", [parentRef("C")]),
+        createEntry("C", [parentRef("B")], { current_working_copy: true }),
+        createEntry("B", [parentRef("A")], { local_bookmarks: [{ name: "b", synced: true, conflict: false }] }),
+        createEntry("A", []),
+      ];
+      const forceHiddenIds = collectCollapsedDescendants(entries, new Set(["A"])).get("A")!;
+
+      const { edges, visibleIds, reachableVisibleFrom } = classifyEdges(entries, { forceHiddenIds });
+
+      assert.deepStrictEqual([...visibleIds].sort(), ["A", "C"]);
+      const result = insertSyntheticNodes(entries, edges, visibleIds, reachableVisibleFrom);
+      assert.deepStrictEqual(
+        result.map((e) => e.change_id),
+        ["C", "~C~A", "A"],
+      );
+      assert.deepStrictEqual(result[1].elided_ids, ["B"]);
     });
   });
 });
