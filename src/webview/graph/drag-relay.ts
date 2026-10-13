@@ -13,6 +13,7 @@ import {
   isDragging,
   postMessage,
   remoteDrag,
+  remoteDragReceived,
   remoteDragSourceIds,
 } from "./signals";
 
@@ -36,6 +37,7 @@ export function clearRemoteDragNow(): void {
   }
   batch(() => {
     remoteDrag.value = false;
+    remoteDragReceived.value = false;
     remoteDragSourceIds.value = null;
     isDragging.value = false;
     dragStartChangeId.value = null;
@@ -57,6 +59,7 @@ export function applyRemoteDragStart(payload: GraphDragPayload): void {
     dragFiles.value = state.files;
     dragHunks.value = state.hunks;
     remoteDragSourceIds.value = state.sourceIds;
+    remoteDragReceived.value = false;
     remoteDrag.value = true;
     isDragging.value = true;
   });
@@ -115,13 +118,22 @@ export function installDragRelay(): () => void {
       clearRemoteDragNow();
     }
   };
+  const handleDragOver = () => {
+    if (remoteDrag.peek() && !remoteDragReceived.peek()) {
+      remoteDragReceived.value = true;
+    }
+  };
   window.addEventListener("mousemove", handleMouseMove);
   window.addEventListener("dragstart", handleDragStart, true);
+  window.addEventListener("dragenter", handleDragOver, true);
+  window.addEventListener("dragover", handleDragOver, true);
 
   return () => {
     disposeEffect();
     cancelPendingEnd();
     window.removeEventListener("mousemove", handleMouseMove);
     window.removeEventListener("dragstart", handleDragStart, true);
+    window.removeEventListener("dragenter", handleDragOver, true);
+    window.removeEventListener("dragover", handleDragOver, true);
   };
 }

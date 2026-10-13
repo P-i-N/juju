@@ -47,6 +47,7 @@ import { PillContextMenu } from "./components/pill-context-menu";
 import { RemoteRefContextMenu } from "./components/remote-ref-context-menu";
 import { FileContextMenu } from "./components/file-context-menu";
 import { Tooltip } from "./components/tooltip";
+import { RemoteDropHint } from "./components/remote-drop-hint";
 import { StaleState } from "./components/stale-state";
 import { JJNotFoundState } from "./components/jj-not-found-state";
 import { NoRepoFoundState } from "./components/no-repo-found-state";
@@ -409,6 +410,7 @@ export function App() {
       <RemoteRefContextMenu />
       <FileContextMenu />
       <Tooltip />
+      <RemoteDropHint />
     </ErrorBoundary>
   );
 }

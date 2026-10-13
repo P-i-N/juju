@@ -53,6 +53,11 @@ export const insertModifierHeld = signal(false);
 export const hoveredEdge = signal<HoveredEdge | null>(null);
 /** True while this graph shows a drag that started in another graph window. */
 export const remoteDrag = signal(false);
+/**
+ * True once this window has received drag events for the relayed drag. VS Code blocks webviews from drags that pass
+ * over workbench UI first unless Shift is held, so until then this window may not be able to accept the drop.
+ */
+export const remoteDragReceived = signal(false);
 /** The changes of a drag that started in another graph window, as that window resolved them. */
 export const remoteDragSourceIds = signal<FullChangeId[] | null>(null);
 /** The changes being dragged: the whole selection when the dragged change is part of a multi-selection. */
