@@ -240,6 +240,14 @@ export function parseHunkSelectionKey(key: string): { path: string; hunk: HunkRa
   return { path: key.slice(0, separator), hunk: { oldStart, oldLines, newStart, newLines } };
 }
 
+/**
+ * Whether a changed file can be expanded into hunks: only files modified in place with line
+ * changes. Added, deleted, renamed and copied files always form a single hunk.
+ */
+export function canExpandHunks(file: ChangedFile): boolean {
+  return file.type === "M" && !(file.linesAdded === 0 && file.linesRemoved === 0);
+}
+
 export function fileKey(id: string, path: string): string {
   return `${id}\n${path}`;
 }

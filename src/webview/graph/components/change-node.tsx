@@ -37,6 +37,7 @@ import {
   expandedFileHunks,
   fileHunksCache,
   fileKey,
+  canExpandHunks,
   selectedHunks,
   hunkSelectionKey,
   parseHunkSelectionKey,
@@ -881,7 +882,7 @@ function withLastLoaded<T>(state: T[] | "loading" | "error" | undefined, last: T
 
 /** The hunks shown for an expanded file (or their loading state), undefined when collapsed. */
 function shownHunks(change: RegularChangeNode, file: ChangedFile) {
-  if (!expandedFileHunks.value.has(fileKey(change.id.changeId, file.path))) {
+  if (!canExpandHunks(file) || !expandedFileHunks.value.has(fileKey(change.id.changeId, file.path))) {
     return undefined;
   }
   return withLastLoaded(
@@ -893,10 +894,6 @@ function shownHunks(change: RegularChangeNode, file: ChangedFile) {
 /** Moving hunks rebuilds a file from its other hunks, which only works for files modified in place. */
 function canMoveHunksOf(change: RegularChangeNode, file: ChangedFile): boolean {
   return change.id.changeId !== rootChangeId && file.type === "M" && !file.conflict;
-}
-
-function canHaveHunks(file: ChangedFile): boolean {
-  return !(file.linesAdded === 0 && file.linesRemoved === 0);
 }
 
 function hunkLabel(hunk: FileHunk): string {
@@ -1229,7 +1226,7 @@ Double-click to ${file.conflict ? "resolve conflict" : "open diff"}`}
         hoveredEdge.value = null;
       }}
     >
-      {canHaveHunks(file) ? (
+      {canExpandHunks(file) ? (
         <span
           class={cx(
             styles.hunksToggle,

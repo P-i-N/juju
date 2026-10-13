@@ -276,15 +276,23 @@ test.describe("with showChangedFiles enabled by default", () => {
 
   test("a changed file expands into its hunks and a hunk opens the diff", async ({ graphFrame, testRepo, workbox }) => {
     const lines = Array.from({ length: 20 }, (_, i) => `line ${i + 1}`);
+    await testRepo.writeFile("deleted.txt", "gone\n");
     await testRepo.commitFile("a.txt", lines.join("\n") + "\n", "base");
     const changed = [...lines];
     changed[1] = "changed 2";
     changed.splice(14, 0, "inserted after 14", "inserted again");
+    await testRepo.deleteFile("deleted.txt");
+    await testRepo.writeFile("added.txt", "new\n");
     const change = await testRepo.commitFile("a.txt", changed.join("\n") + "\n", "edit");
 
     await graphFrame.locator(`#nodes > div[data-change-id^="${change}/"] [data-role="files-toggle"]`).click();
     const file = fileRows(graphFrame, change, "a.txt");
     await expect(file).toBeVisible();
+    // Added and deleted files are a single hunk, so they cannot be expanded.
+    await expect(fileRows(graphFrame, change, "added.txt")).toBeVisible();
+    await expect(fileRows(graphFrame, change, "added.txt").locator('[data-role="hunks-toggle"]')).toHaveCount(0);
+    await expect(fileRows(graphFrame, change, "deleted.txt").locator('[data-role="hunks-toggle"]')).toHaveCount(0);
+    await expect(file.locator('[data-role="hunks-toggle"]')).toHaveCount(1);
 
     const hunks = graphFrame.locator(`#nodes > [data-role="file-hunk"][data-hunk-of^="${change}/"][data-path="a.txt"]`);
     await expect(hunks).toHaveCount(0);
@@ -343,7 +351,11 @@ test.describe("with showChangedFiles enabled by default", () => {
   });
 
   test("moving a hunk keeps the source and destination expanded throughout", async ({ graphFrame, testRepo }) => {
-    const lines = Array.from({ length: 20 }, (_, i) => `line ${i + 1}`);
+    const base = Array.from({ length: 20 }, (_, i) => `line ${i + 1}`);
+    await testRepo.commitFile("a.txt", base.join("\n") + "\n", "base");
+    // The destination modifies a.txt too, so that it has hunks of its own to keep expanded.
+    const lines = [...base];
+    lines[17] = "target 18";
     const target = await testRepo.commitFile("a.txt", lines.join("\n") + "\n", "target");
     const changed = [...lines];
     changed[1] = "changed 2";
@@ -387,7 +399,7 @@ test.describe("with showChangedFiles enabled by default", () => {
 
     await expect(hunkRows(source)).toHaveCount(1);
     await expect(hunkRows(source).nth(0).locator('[data-role="hunk-preview"]')).toHaveText("inserted after 14");
-    await expect(hunkRows(target)).toHaveCount(1);
+    await expect(hunkRows(target)).toHaveCount(2);
     await expect(graphFrame.locator(".codicon-loading")).toHaveCount(0);
     expect(await graphFrame.evaluate(() => (window as unknown as { sawCollapse: boolean }).sawCollapse)).toBe(false);
   });

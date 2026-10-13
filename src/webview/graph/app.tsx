@@ -32,6 +32,7 @@ import {
   expandedFileHunks,
   fileHunksCache,
   fileKey,
+  canExpandHunks,
   lastChangedFiles,
   lastFileHunks,
   pillContextMenu,
@@ -169,7 +170,7 @@ export function App() {
           continue;
         }
         for (const file of files) {
-          if (!expandedHunks.has(fileKey(change.id.changeId, file.path))) {
+          if (!canExpandHunks(file) || !expandedHunks.has(fileKey(change.id.changeId, file.path))) {
             continue;
           }
           const key = fileKey(change.commitId, file.path);
