@@ -1015,6 +1015,7 @@ export function registerInitCommands(state: ExtensionState): void {
 
   context.subscriptions.push(
     vscode.commands.registerCommand("jj.openGraphInTab", () => state.graphWebview!.openInTab()),
+    vscode.commands.registerCommand("jj.openGraphInWindow", () => state.graphWebview!.openInWindow()),
   );
 
   context.subscriptions.push(

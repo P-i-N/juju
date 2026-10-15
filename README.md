@@ -37,11 +37,12 @@ Hold `Ctrl` (`Cmd` on macOS) and the edges between changes light up as you hover
 
 ![Moving a change between two others and inserting a new change](images/inserting-changes.gif)
 
-### 🗂️ Graph in an Editor Tab
+### 🗂️ Graph in a Window or Editor Tab
 
-Open the graph in a regular editor tab with the "Open Graph in Tab" button in the JJ Graph toolbar (or the
-`Jujutsu: Open Graph in Tab` command) to give it all the room it needs. The tab has the full graph toolbar, and its
-selection stays in sync with the graph in the side bar.
+Open the graph in a window of its own with the "Open Graph in Window" button in the JJ Graph toolbar (or the
+`Jujutsu: Open Graph in Window` command) to give it all the room it needs, e.g. on a second monitor. The
+`Jujutsu: Open Graph in Tab` command opens it in a regular editor tab instead. Both have the full graph toolbar, and
+their selection stays in sync with the graph in the side bar.
 
 ![Opening the graph in an editor tab](images/graph-in-tab.gif)
 

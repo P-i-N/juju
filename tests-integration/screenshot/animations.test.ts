@@ -547,15 +547,7 @@ test("record inserting changes", async ({ electronApp, userDataDir, graphFrame, 
   toGif(recorder.videoPath, "inserting-changes.gif", clip, 0.8);
 });
 
-test("record graph in tab", async ({
-  electronApp,
-  userDataDir,
-  scmView,
-  graphFrame,
-  testRepo,
-  workbox,
-  xvfbDisplay,
-}) => {
+test("record graph in tab", async ({ electronApp, userDataDir, graphFrame, testRepo, workbox, xvfbDisplay }) => {
   await prepareWorkbench(electronApp, userDataDir, workbox, { width: 1100, height: 640 });
   const ids = await initializeDemoRepo(testRepo);
   await expect(graphFrame.locator("#nodes > div[data-change-id]")).toHaveCount(7);
@@ -570,12 +562,7 @@ test("record graph in tab", async ({
   await recorder.start();
   await workbox.waitForTimeout(1000);
 
-  const graphHeader = scmView.locator(".pane-header", { hasText: "JJ Graph" }).first();
-  await pointer.moveToLocator(graphHeader, { x: 60 }, 700);
-  const openInTab = graphHeader.getByRole("button", { name: "Open Graph in Tab" });
-  await pointer.moveToLocator(openInTab, undefined, 600);
-  await workbox.waitForTimeout(300);
-  await pointer.click();
+  await runCommand(workbox, "Jujutsu: Open Graph in Tab");
   const tabFrame = await findTabGraphFrame(workbox, graphFrame);
   await expect(tabFrame.locator("#nodes > div[data-change-id]")).toHaveCount(7);
   await workbox.waitForTimeout(1200);

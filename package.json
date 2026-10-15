@@ -221,6 +221,12 @@
         "icon": "$(link-external)"
       },
       {
+        "command": "jj.openGraphInWindow",
+        "title": "Open Graph in Window",
+        "category": "Jujutsu",
+        "icon": "$(link-external)"
+      },
+      {
         "command": "jj.toggleElideImmutableCommits.show",
         "title": "Show Elided Commits",
         "category": "Jujutsu",
@@ -526,7 +532,7 @@
           "group": "navigation@8"
         },
         {
-          "command": "jj.openGraphInTab",
+          "command": "jj.openGraphInWindow",
           "when": "view == jjGraphWebview",
           "group": "navigation@9"
         }
@@ -827,6 +833,10 @@
         },
         {
           "command": "jj.openGraphInTab",
+          "when": "jj.reposExist"
+        },
+        {
+          "command": "jj.openGraphInWindow",
           "when": "jj.reposExist"
         },
         {

@@ -204,6 +204,22 @@ export class JJGraphWebview implements vscode.WebviewViewProvider {
     void this.attachTab(panel);
   }
 
+  public async openInWindow(): Promise<void> {
+    const panel = vscode.window.createWebviewPanel(
+      GRAPH_TAB_VIEW_TYPE,
+      this.surfaceTitle(),
+      { viewColumn: vscode.ViewColumn.Active, preserveFocus: false },
+      {
+        enableScripts: true,
+        retainContextWhenHidden: true,
+        localResourceRoots: [this.extensionUri],
+      },
+    );
+    // The new panel is the active editor, so this moves it into a new window of its own.
+    await vscode.commands.executeCommand("workbench.action.moveEditorToNewWindow");
+    await this.attachTab(panel);
+  }
+
   private restoreTab(panel: vscode.WebviewPanel): void {
     void this.attachTab(panel);
   }

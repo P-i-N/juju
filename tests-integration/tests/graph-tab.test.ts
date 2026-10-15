@@ -66,6 +66,37 @@ test("graph tab mirrors the sidebar graph", async ({ graphFrame, testRepo, workb
   });
 });
 
+test("Open Graph in Window opens a live graph in a new window", async ({
+  electronApp,
+  graphFrame,
+  testRepo,
+  workbox,
+}) => {
+  await testRepo.commitFile("a.txt", "content a", "A");
+  const sidebarNodes = graphFrame.locator("#nodes > div");
+  await expect(sidebarNodes).toHaveCount(3); // @, A, root
+
+  const newWindowPromise = electronApp.waitForEvent("window");
+  await runCommand(workbox, "Jujutsu: Open Graph in Window");
+  const newWindow = await newWindowPromise;
+  await expect(workbox.locator(".tab", { hasText: "JJ Graph" })).toHaveCount(0);
+
+  const windowFrame = await findOtherGraphFrame(newWindow, graphFrame);
+  const windowNodes = windowFrame.locator("#nodes > div");
+  await expect(windowNodes).toHaveCount(3);
+
+  await test.step("a repository change updates the graph in the window", async () => {
+    await testRepo.commitFile("b.txt", "content b", "B");
+    await expect(sidebarNodes).toHaveCount(4);
+    await expect(windowNodes).toHaveCount(4);
+  });
+
+  await test.step("selecting in the window selects in the sidebar", async () => {
+    await windowNodes.nth(1).click();
+    await expect(sidebarNodes.nth(1)).toHaveAttribute("data-selected");
+  });
+});
+
 test("each Open Graph in Tab opens another live graph tab", async ({ graphFrame, testRepo, workbox }) => {
   await testRepo.commitFile("a.txt", "content a", "A");
   await testRepo.commitFile("b.txt", "content b", "B");
