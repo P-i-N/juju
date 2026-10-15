@@ -44,13 +44,20 @@ import { SplitWebview } from "./split-webview";
 import { toJJUri } from "./uri";
 import { joinRepositoryPath, repositoryRelativePath, toWorkspaceUri } from "./workspace-paths";
 import { DEFAULT_CHANGE_DOUBLE_CLICK_ACTION, resolveDoubleClickAction } from "./double-click-action";
-import { abandonEntries, rebaseEntries, type OptimisticTransform } from "./optimistic-graph";
+import {
+  abandonEntries,
+  moveChangedFiles,
+  rebaseEntries,
+  type ChangeFiles,
+  type LineCounts,
+  type OptimisticTransform,
+} from "./optimistic-graph";
+import { CommitCache } from "./commit-cache";
 
 const rootChangeId = "z".repeat(32);
 const CHANGED_FILES_CACHE_LIMIT = 2000;
 const CHANGED_FILES_PREFETCH_BATCH_SIZE = 100;
-
-type LineCounts = Map<string, { added: number; removed: number }>;
+const PENDING_COMMIT_ID_SEPARATOR = ":pending-";
 const GRAPH_TAB_VIEW_TYPE = "jjGraphTab";
 
 export interface GraphSelection {
@@ -105,8 +112,10 @@ export class JJGraphWebview implements vscode.WebviewViewProvider {
   private operationGeneration = 0;
   private renderSequence = 0;
   private exclusiveOperation: { label: string; promise: Promise<void> } | undefined;
-  private changedFilesCache = new Map<string, Promise<ChangedFile[]>>();
-  private lineCountsCache = new Map<string, Promise<LineCounts>>();
+  private readonly changedFilesCache = new CommitCache<ChangedFile[]>(CHANGED_FILES_CACHE_LIMIT);
+  private readonly lineCountsCache = new CommitCache<LineCounts>(CHANGED_FILES_CACHE_LIMIT);
+  private pendingCommitSequence = 0;
+  private readonly pendingFileOrigins = new Map<string, Map<string, string>>();
   private renderLookups:
     { repositoryRoot: string; operationId: string; values: Map<string, Promise<unknown>> } | undefined;
 
@@ -354,7 +363,7 @@ export class JJGraphWebview implements vscode.WebviewViewProvider {
         if (change) {
           await vscode.commands.executeCommand(
             "jj.showChangeDetailsWebview",
-            change.commitId,
+            this.toRealCommitId(change.commitId),
             formatChangeIdShort(change.id),
           );
         }
@@ -723,11 +732,12 @@ export class JJGraphWebview implements vscode.WebviewViewProvider {
           break;
         }
         await this.withRefresh("split change", async () => {
-          const state = await this.splitWebview.selectChanges(repo, change.commitId);
+          const commitId = this.toRealCommitId(change.commitId);
+          const state = await this.splitWebview.selectChanges(repo, commitId);
           if (!state) {
             return;
           }
-          await repo.splitChangeRetryImmutable({ commitId: change.commitId, state });
+          await repo.splitChangeRetryImmutable({ commitId, state });
         });
         break;
       }
@@ -800,12 +810,15 @@ export class JJGraphWebview implements vscode.WebviewViewProvider {
         );
         break;
       case "moveFileChanges":
-        await this.withRefresh("move file changes", () =>
-          repo.squashRetryImmutable({
-            fromRevs: [message.fromChangeId],
-            toRev: message.toChangeId,
-            filepaths: message.paths.map((p) => joinRepositoryPath(repo.repositoryRoot, p)),
-          }),
+        await this.runOptimistic(
+          "move file changes",
+          () =>
+            repo.squashRetryImmutable({
+              fromRevs: [message.fromChangeId],
+              toRev: message.toChangeId,
+              filepaths: message.paths.map((p) => joinRepositoryPath(repo.repositoryRoot, p)),
+            }),
+          this.predictFileMove(message.fromChangeId, message.toChangeId, message.paths),
         );
         break;
       case "discardFileChanges": {
@@ -938,7 +951,11 @@ export class JJGraphWebview implements vscode.WebviewViewProvider {
         const startTime = performance.now();
         let hunks: FileHunk[] | null = null;
         try {
-          hunks = await repo.getFileHunks(message.commitId, message.path, message.renamedFrom);
+          hunks = await repo.getFileHunks(
+            this.toRealCommitId(message.commitId, message.path),
+            message.path,
+            message.renamedFrom,
+          );
         } catch (error: unknown) {
           logger.warn(`Failed to load hunks: ${error instanceof Error ? error.message : String(error)}`);
         }
@@ -1134,7 +1151,7 @@ export class JJGraphWebview implements vscode.WebviewViewProvider {
       if (!node) {
         return [];
       }
-      return { id: node.id, commitId: node.commitId, currentWorkingCopy: node.currentWorkingCopy };
+      return { id: node.id, commitId: this.toRealCommitId(node.commitId), currentWorkingCopy: node.currentWorkingCopy };
     });
   }
 
@@ -1197,7 +1214,7 @@ export class JJGraphWebview implements vscode.WebviewViewProvider {
     if (prevRoot !== repo.repositoryRoot) {
       this.lastGraphMessage = undefined;
       this.lastSnapshot = undefined;
-      this.pendingTransforms = [];
+      this.setPendingTransforms([]);
       this.changedFilesCache.clear();
       this.lineCountsCache.clear();
       await this.refresh();
@@ -1283,7 +1300,7 @@ export class JJGraphWebview implements vscode.WebviewViewProvider {
       void this.rerender();
     }
     const removeTransform = () => {
-      this.pendingTransforms = this.pendingTransforms.filter((t) => t !== transform);
+      this.setPendingTransforms(this.pendingTransforms.filter((t) => t !== transform));
     };
 
     const run = this.operationQueue.then(async () => {
@@ -1305,7 +1322,7 @@ export class JJGraphWebview implements vscode.WebviewViewProvider {
           await this.rerender();
         } catch (error: unknown) {
           this.operationGeneration++;
-          this.pendingTransforms = [];
+          this.setPendingTransforms([]);
           // Cancellation is user-initiated. The cancel handler reports it,
           // so don't also surface a generic failure message.
           if (!(error instanceof CancelledError)) {
@@ -1364,38 +1381,74 @@ export class JJGraphWebview implements vscode.WebviewViewProvider {
     }));
   }
 
-  /**
-   * Stores a pending load in a commit-id keyed cache. Commit ids are content addressed, so cached
-   * data never goes stale; failed loads are evicted so they are retried, and the oldest entries
-   * are dropped beyond CHANGED_FILES_CACHE_LIMIT.
-   */
-  private cacheByCommit<T>(cache: Map<string, Promise<T>>, commitId: string, promise: Promise<T>): Promise<T> {
-    cache.delete(commitId);
-    cache.set(commitId, promise);
-    promise.catch(() => {
-      if (cache.get(commitId) === promise) {
-        cache.delete(commitId);
-      }
-    });
-    while (cache.size > CHANGED_FILES_CACHE_LIMIT) {
-      cache.delete(cache.keys().next().value!);
-    }
-    return promise;
-  }
-
   private loadChangedFiles(repo: JJRepository, commitId: string): Promise<ChangedFile[]> {
-    const load = () =>
-      this.cacheByCommit(
-        this.changedFilesCache,
-        commitId,
-        repo.getChangedFiles(commitId).then((files) => this.toChangedFiles(repo, files)),
-      );
-    return this.changedFilesCache.get(commitId)?.catch(load) ?? load();
+    return this.changedFilesCache.load(commitId, () =>
+      repo.getChangedFiles(this.toRealCommitId(commitId)).then((files) => this.toChangedFiles(repo, files)),
+    );
   }
 
   private loadLineCounts(repo: JJRepository, commitId: string): Promise<LineCounts> {
-    const load = () => this.cacheByCommit(this.lineCountsCache, commitId, repo.getChangedFileLineCounts(commitId));
-    return this.lineCountsCache.get(commitId)?.catch(load) ?? load();
+    return this.lineCountsCache.load(commitId, () => repo.getChangedFileLineCounts(this.toRealCommitId(commitId)));
+  }
+
+  /**
+   * Maps a commit id shown in the graph to one jj knows. A predicted change (see predictFileMove)
+   * shows a pending commit id until jj has rewritten it; until then its content, or that of a
+   * file moved into it, is read from the commit it came from.
+   */
+  private toRealCommitId(commitId: string, filePath?: string): string {
+    const origin = filePath === undefined ? undefined : this.pendingFileOrigins.get(commitId)?.get(filePath);
+    if (origin !== undefined) {
+      return this.toRealCommitId(origin, filePath);
+    }
+    return commitId.split(PENDING_COMMIT_ID_SEPARATOR)[0];
+  }
+
+  /**
+   * Predicts moving the changes of files between two changes. The graph keeps its shape, so the
+   * prediction gives both changes pending commit ids and caches their predicted file lists under
+   * those ids, which the webview then loads like any other.
+   */
+  private predictFileMove(fromChangeId: FullChangeId, toChangeId: FullChangeId, paths: string[]): OptimisticTransform {
+    const sequence = ++this.pendingCommitSequence;
+    return (entries) => {
+      const source = entries.find((e) => getUniqueEntryId(e) === fromChangeId);
+      const destination = entries.find((e) => getUniqueEntryId(e) === toChangeId);
+      if (!source || !destination || source.immutable || destination.immutable) {
+        return undefined;
+      }
+      const sourceFiles = this.loadedChangeFiles(source.commit_id);
+      const destinationFiles = this.loadedChangeFiles(destination.commit_id);
+      if (!sourceFiles || !destinationFiles) {
+        return undefined;
+      }
+      const predicted = moveChangedFiles(sourceFiles, destinationFiles, paths);
+      if (!predicted) {
+        return undefined;
+      }
+      const sourceId = `${source.commit_id}${PENDING_COMMIT_ID_SEPARATOR}${sequence}`;
+      const destinationId = `${destination.commit_id}${PENDING_COMMIT_ID_SEPARATOR}${sequence}`;
+      this.changedFilesCache.setValue(sourceId, predicted.source.files);
+      this.lineCountsCache.setValue(sourceId, predicted.source.lineCounts);
+      this.changedFilesCache.setValue(destinationId, predicted.destination.files);
+      this.lineCountsCache.setValue(destinationId, predicted.destination.lineCounts);
+      const movedPaths = sourceFiles.files
+        .map((f) => f.path)
+        .filter((p) => !predicted.source.files.some((f) => f.path === p));
+      this.pendingFileOrigins.set(destinationId, new Map(movedPaths.map((p) => [p, source.commit_id])));
+      return entries.map((e) =>
+        e === source
+          ? { ...e, commit_id: sourceId }
+          : e === destination
+            ? { ...e, commit_id: destinationId, empty: false }
+            : e,
+      );
+    };
+  }
+
+  private loadedChangeFiles(commitId: string): ChangeFiles | undefined {
+    const files = this.changedFilesCache.getSettled(commitId);
+    return files && { files, lineCounts: this.lineCountsCache.getSettled(commitId) ?? (new Map() as LineCounts) };
   }
 
   /**
@@ -1419,8 +1472,7 @@ export class JJGraphWebview implements vscode.WebviewViewProvider {
           logger.warn(`Failed to prefetch changed files: ${error instanceof Error ? error.message : String(error)}`),
       );
       for (const id of ids) {
-        void this.cacheByCommit(
-          this.changedFilesCache,
+        void this.changedFilesCache.set(
           id,
           batch.then((files) => {
             const fileStatuses = files.get(id);
@@ -1446,8 +1498,7 @@ export class JJGraphWebview implements vscode.WebviewViewProvider {
           logger.warn(`Failed to prefetch line counts: ${error instanceof Error ? error.message : String(error)}`),
       );
       for (const id of ids) {
-        void this.cacheByCommit(
-          this.lineCountsCache,
+        void this.lineCountsCache.set(
           id,
           batch.then((counts) => {
             const lineCounts = counts?.get(id);
@@ -1459,6 +1510,13 @@ export class JJGraphWebview implements vscode.WebviewViewProvider {
           }),
         );
       }
+    }
+  }
+
+  private setPendingTransforms(transforms: OptimisticTransform[]): void {
+    this.pendingTransforms = transforms;
+    if (transforms.length === 0) {
+      this.pendingFileOrigins.clear();
     }
   }
 

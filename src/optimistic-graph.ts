@@ -1,5 +1,72 @@
 import { getParentUniqueId, getUniqueEntryId } from "./elided-edges";
+import type { ChangedFile } from "./graph-protocol";
 import type { LogEntry, ParentRef } from "./types";
+
+export type LineCounts = Map<string, { added: number; removed: number }>;
+
+export interface ChangeFiles {
+  files: ChangedFile[];
+  lineCounts: LineCounts;
+}
+
+function isUnder(filePath: string, paths: string[]): boolean {
+  return paths.some((p) => filePath === p || filePath.startsWith(`${p}/`));
+}
+
+/**
+ * Predicts the changed files of both changes after `jj squash --from <source> --into <destination> <paths>`.
+ * Returns undefined when the outcome cannot be predicted: nothing or a rename/copy would move, or the source
+ * would become empty (jj then abandons it and may ask how to combine the descriptions).
+ */
+export function moveChangedFiles(
+  source: ChangeFiles,
+  destination: ChangeFiles,
+  paths: string[],
+): { source: ChangeFiles; destination: ChangeFiles } | undefined {
+  const moved = source.files.filter((f) => isUnder(f.path, paths));
+  const remaining = source.files.filter((f) => !isUnder(f.path, paths));
+  if (moved.length === 0 || remaining.length === 0 || moved.some((f) => f.type === "R" || f.type === "C")) {
+    return undefined;
+  }
+  if (destination.files.some((f) => (f.type === "R" || f.type === "C") && moved.some((m) => m.path === f.path))) {
+    return undefined;
+  }
+
+  const sourceCounts = new Map([...source.lineCounts].filter(([p]) => !isUnder(p, paths)));
+  const destinationFiles = new Map(destination.files.map((f) => [f.path, f]));
+  const destinationCounts = new Map(destination.lineCounts);
+  for (const file of moved) {
+    const existing = destinationFiles.get(file.path);
+    if (!existing) {
+      destinationFiles.set(file.path, file);
+      const counts = source.lineCounts.get(file.path);
+      if (counts) {
+        destinationCounts.set(file.path, counts);
+      }
+      continue;
+    }
+    // Both changes touch the file: the combined line counts are unknown until jj reports them.
+    destinationCounts.delete(file.path);
+    const conflict = existing.conflict || file.conflict;
+    if (file.type === "D") {
+      if (existing.type === "A") {
+        destinationFiles.delete(file.path);
+      } else {
+        destinationFiles.set(file.path, { ...existing, type: "D", conflict });
+      }
+    } else {
+      destinationFiles.set(file.path, { ...existing, type: existing.type === "D" ? "M" : existing.type, conflict });
+    }
+  }
+
+  return {
+    source: { files: remaining, lineCounts: sourceCounts },
+    destination: {
+      files: [...destinationFiles.values()].sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0)),
+      lineCounts: destinationCounts,
+    },
+  };
+}
 
 export type OptimisticTransform = (entries: LogEntry[]) => LogEntry[] | undefined;
 

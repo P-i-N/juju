@@ -1,7 +1,8 @@
 /* eslint-disable @typescript-eslint/no-floating-promises */
 import { describe, it } from "node:test";
 import assert from "node:assert";
-import { abandonEntries, rebaseEntries } from "../optimistic-graph";
+import { abandonEntries, moveChangedFiles, rebaseEntries, type ChangeFiles } from "../optimistic-graph";
+import type { ChangedFile } from "../graph-protocol";
 import type { LogEntry } from "../types";
 
 function createEntry(changeId: string, parentIds: string[] = [], extra: Partial<LogEntry> = {}): LogEntry {
@@ -153,5 +154,66 @@ describe("rebaseEntries", () => {
     assert.strictEqual(rebaseEntries(sampleGraph(), ["b"], "x", "onto", false), undefined);
     assert.strictEqual(rebaseEntries(sampleGraph(), ["b"], "c", "onto", true), undefined);
     assert.strictEqual(rebaseEntries(sampleGraph(), ["a"], "z", "before", false), undefined);
+  });
+});
+
+function file(path: string, type: ChangedFile["type"], extra: Partial<ChangedFile> = {}): ChangedFile {
+  return { path, type, conflict: false, ...extra };
+}
+
+function changeFiles(files: ChangedFile[], counts: Record<string, [number, number]> = {}): ChangeFiles {
+  return {
+    files,
+    lineCounts: new Map(Object.entries(counts).map(([p, [added, removed]]) => [p, { added, removed }])),
+  };
+}
+
+function describeFiles(files: ChangeFiles): string[] {
+  return files.files.map((f) => {
+    const counts = files.lineCounts.get(f.path);
+    return `${f.type} ${f.path}${counts ? ` +${counts.added}-${counts.removed}` : ""}`;
+  });
+}
+
+describe("moveChangedFiles", () => {
+  it("moves a file into a change that does not touch it", () => {
+    const result = moveChangedFiles(
+      changeFiles([file("a.txt", "M"), file("b.txt", "A")], { "a.txt": [1, 2], "b.txt": [3, 0] }),
+      changeFiles([file("c.txt", "M")], { "c.txt": [4, 4] }),
+      ["b.txt"],
+    )!;
+    assert.deepStrictEqual(describeFiles(result.source), ["M a.txt +1-2"]);
+    assert.deepStrictEqual(describeFiles(result.destination), ["A b.txt +3-0", "M c.txt +4-4"]);
+  });
+
+  it("moves every file under a directory path", () => {
+    const result = moveChangedFiles(
+      changeFiles([file("src/a.ts", "M"), file("src/b.ts", "M"), file("srcx.ts", "M")]),
+      changeFiles([]),
+      ["src"],
+    )!;
+    assert.deepStrictEqual(describeFiles(result.source), ["M srcx.ts"]);
+    assert.deepStrictEqual(describeFiles(result.destination), ["M src/a.ts", "M src/b.ts"]);
+  });
+
+  it("combines statuses of files both changes touch and drops their unknown line counts", () => {
+    const result = moveChangedFiles(
+      changeFiles([file("added.txt", "M"), file("deleted.txt", "D"), file("readded.txt", "A"), file("keep.txt", "M")], {
+        "added.txt": [1, 1],
+      }),
+      changeFiles([file("added.txt", "A"), file("deleted.txt", "A"), file("readded.txt", "D")], {
+        "added.txt": [5, 0],
+      }),
+      ["added.txt", "deleted.txt", "readded.txt"],
+    )!;
+    assert.deepStrictEqual(describeFiles(result.destination), ["A added.txt", "M readded.txt"]);
+  });
+
+  it("refuses moves it cannot predict", () => {
+    const source = changeFiles([file("a.txt", "M"), file("b.txt", "M")]);
+    assert.strictEqual(moveChangedFiles(source, changeFiles([]), ["missing.txt"]), undefined);
+    assert.strictEqual(moveChangedFiles(source, changeFiles([]), ["a.txt", "b.txt"]), undefined);
+    const renamed = changeFiles([file("new.txt", "R", { renamedFrom: "old.txt" }), file("b.txt", "M")]);
+    assert.strictEqual(moveChangedFiles(renamed, changeFiles([]), ["new.txt"]), undefined);
   });
 });
