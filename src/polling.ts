@@ -116,7 +116,9 @@ export function initInfrastructure(state: ExtensionState) {
     }
     const appliedAt = Date.now();
     await graphWebview.applySnapshot(snapshot);
+    const detailsStartTime = performance.now();
     await detailsWebview.refresh(appliedAt);
+    logger.debug(`timing: details refresh ${(performance.now() - detailsStartTime).toFixed(0)}ms`);
   };
 
   context.subscriptions.push(

@@ -1119,24 +1119,33 @@ export function registerInitCommands(state: ExtensionState): void {
     errorPrefix: "Failed to push to remote",
   });
 
-  for (const [command, method] of [
-    ["jj.undo", "undo"],
-    ["jj.redo", "redo"],
+  const runOperationLogAction = async (label: string, progressTitle: string, fn: () => Promise<void>) => {
+    const run = async () => {
+      await fn();
+      await state.operationLogManager!.refresh();
+      await state.graphWebview?.refresh();
+    };
+    await (state.graphWebview ? state.graphWebview.runExclusive(label, progressTitle, run) : run());
+  };
+
+  for (const [command, method, label, progressTitle] of [
+    ["jj.undo", "undo", "Undo", "Undoing"],
+    ["jj.redo", "redo", "Redo", "Redoing"],
   ] as const) {
     registerCommand(context, command, async () => {
       const repository = state.getSelectedRepo();
       if (!repository) {
         return;
       }
-      await repository[method]();
-      await state.operationLogManager!.refresh();
-      await state.graphWebview?.refresh();
+      await runOperationLogAction(label, progressTitle, async () => {
+        await repository[method]();
+      });
     });
   }
 
-  for (const [command, action, errorPrefix] of [
-    ["jj.operationRevert", "operationRevert", "Failed to revert operation"],
-    ["jj.operationRestore", "operationRestore", "Failed to restore operation"],
+  for (const [command, action, errorPrefix, label, progressTitle] of [
+    ["jj.operationRevert", "operationRevert", "Failed to revert operation", "Revert", "Reverting Operation"],
+    ["jj.operationRestore", "operationRestore", "Failed to restore operation", "Restore", "Restoring Operation"],
   ] as const) {
     registerCommand(
       context,
@@ -1149,9 +1158,9 @@ export function registerInitCommands(state: ExtensionState): void {
         if (!repository) {
           throw new Error("Repository not found");
         }
-        await repository[action](item.operation.id);
-        await state.operationLogManager!.refresh();
-        await state.graphWebview?.refresh();
+        await runOperationLogAction(label, progressTitle, async () => {
+          await repository[action](item.operation.id);
+        });
       },
       { errorPrefix },
     );

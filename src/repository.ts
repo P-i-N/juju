@@ -420,6 +420,7 @@ export class JJRepository {
   }
 
   async loadSnapshot(request: SnapshotRequest, token?: vscode.CancellationToken): Promise<RepositorySnapshot> {
+    const startTime = performance.now();
     const opLogArgs = ["operation", "log", "--limit", "10", "--no-graph", "-T", buildOperationTemplate(this.jjVersion)];
     const opLogOutput = await withDivergenceHandling(
       () => handleJJCommand(this.spawnJJ(["--at-operation=@", ...opLogArgs], { cwd: this.repositoryRoot }), token),
@@ -435,6 +436,7 @@ export class JJRepository {
     if (!request.force && operationId === request.previousOperationId) {
       return { changed: false, operationId };
     }
+    const opLogDuration = performance.now() - startTime;
 
     const template = buildSnapshotLogTemplate();
     const revsetArgs = request.graph
@@ -462,6 +464,9 @@ export class JJRepository {
       );
     }
 
+    logger.debug(
+      `timing: loadSnapshot op log=${opLogDuration.toFixed(0)}ms log=${(performance.now() - startTime - opLogDuration).toFixed(0)}ms entries=${entries.length} fallback=${fallbackEntries.length > 0}`,
+    );
     return {
       changed: true,
       operationId,

@@ -695,11 +695,13 @@ class RepositorySourceControlManager {
     // watchdog aborted) retries the same operation on the next poll.
     this.operationId = snapshot.operationId;
 
+    const consumeStartTime = performance.now();
     try {
       await this.consumeSnapshot(snapshot);
     } catch (error) {
       logger.error(`Failed to apply repository snapshot: ${error instanceof Error ? error.message : String(error)}`);
     }
+    logger.debug(`timing: consumeSnapshot ${(performance.now() - consumeStartTime).toFixed(0)}ms`);
     try {
       if (!token.isCancellationRequested) {
         await this.refreshUntrackedFiles(token);

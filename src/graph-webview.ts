@@ -42,6 +42,7 @@ import { SplitWebview } from "./split-webview";
 import { toJJUri } from "./uri";
 import { joinRepositoryPath, repositoryRelativePath, toWorkspaceUri } from "./workspace-paths";
 import { DEFAULT_CHANGE_DOUBLE_CLICK_ACTION, resolveDoubleClickAction } from "./double-click-action";
+import { abandonEntries, rebaseEntries, type OptimisticTransform } from "./optimistic-graph";
 
 const rootChangeId = "z".repeat(32);
 const GRAPH_TAB_VIEW_TYPE = "jjGraphTab";
@@ -93,6 +94,13 @@ export class JJGraphWebview implements vscode.WebviewViewProvider {
 
   private lastSnapshot: ChangedSnapshot | undefined;
   private refreshHandler: ((repo: JJRepository) => Promise<void>) | undefined;
+  private pendingTransforms: OptimisticTransform[] = [];
+  private operationQueue: Promise<void> = Promise.resolve();
+  private operationGeneration = 0;
+  private renderSequence = 0;
+  private exclusiveOperation: { label: string; promise: Promise<void> } | undefined;
+  private renderLookups:
+    { repositoryRoot: string; operationId: string; values: Map<string, Promise<unknown>> } | undefined;
 
   constructor(
     private readonly extensionUri: vscode.Uri,
@@ -705,8 +713,12 @@ export class JJGraphWebview implements vscode.WebviewViewProvider {
         const prompt = change
           ? `Are you sure you want to abandon change "${formatChangeIdShort(change.id)}"?\n\n→ ${truncated}`
           : "Are you sure you want to abandon this change?";
-        await this.confirmAndExecute(prompt, "Abandon", "abandon change", () =>
-          repo.abandonRetryImmutable(message.changeId),
+        await this.confirmAndExecute(
+          prompt,
+          "Abandon",
+          "abandon change",
+          () => repo.abandonRetryImmutable(message.changeId),
+          (entries) => abandonEntries(entries, [message.changeId]),
         );
         break;
       }
@@ -720,6 +732,7 @@ export class JJGraphWebview implements vscode.WebviewViewProvider {
               message.changeIds,
               "Some of the selected changes are immutable, are you sure?",
             ),
+          (entries) => abandonEntries(entries, message.changeIds),
         );
         break;
       case "copyUrl":
@@ -738,8 +751,10 @@ export class JJGraphWebview implements vscode.WebviewViewProvider {
       case "rebaseAfter":
       case "rebaseBefore": {
         const mode = message.command.replace("rebase", "").toLowerCase() as "onto" | "after" | "before";
-        await this.withRefresh("rebase", () =>
-          repo.rebaseRetryImmutable(message.changeIds, message.targetChangeId, mode, message.withDescendants),
+        await this.runOptimistic(
+          "rebase",
+          () => repo.rebaseRetryImmutable(message.changeIds, message.targetChangeId, mode, message.withDescendants),
+          (entries) => rebaseEntries(entries, message.changeIds, message.targetChangeId, mode, message.withDescendants),
         );
         break;
       }
@@ -1145,14 +1160,60 @@ export class JJGraphWebview implements vscode.WebviewViewProvider {
     if (prevRoot !== repo.repositoryRoot) {
       this.lastGraphMessage = undefined;
       this.lastSnapshot = undefined;
+      this.pendingTransforms = [];
       await this.refresh();
     }
   }
 
-  private async withRefresh(errorLabel: string, fn: () => Promise<unknown>): Promise<void> {
+  /**
+   * Runs an operation that must not interleave with graph operations (e.g. undo): it waits for
+   * all queued graph operations to finish, then runs with a blocking progress notification. Graph
+   * operations requested meanwhile are refused instead of queued, so they are never predicted
+   * from, or applied to, a state the exclusive operation is about to change.
+   */
+  public async runExclusive(label: string, progressTitle: string, fn: () => Promise<void>): Promise<void> {
+    while (this.exclusiveOperation) {
+      await this.exclusiveOperation.promise.catch(() => undefined);
+    }
+    const promise = Promise.resolve(
+      vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: progressTitle }, async () => {
+        await this.operationQueue;
+        await fn();
+      }),
+    );
+    const exclusiveOperation = { label, promise };
+    this.exclusiveOperation = exclusiveOperation;
     try {
+      await promise;
+    } finally {
+      if (this.exclusiveOperation === exclusiveOperation) {
+        this.exclusiveOperation = undefined;
+      }
+    }
+  }
+
+  private refuseDuringExclusiveOperation(): boolean {
+    if (!this.exclusiveOperation) {
+      return false;
+    }
+    vscode.window.showWarningMessage(
+      `${this.exclusiveOperation.label} is still running. Try again once it has finished.`,
+    );
+    return true;
+  }
+
+  private async withRefresh(errorLabel: string, fn: () => Promise<unknown>): Promise<void> {
+    if (this.refuseDuringExclusiveOperation()) {
+      return;
+    }
+    try {
+      const startTime = performance.now();
       await fn();
+      const operationTime = performance.now();
       await this.refresh();
+      logger.debug(
+        `timing: ${errorLabel} operation=${(operationTime - startTime).toFixed(0)}ms refresh=${(performance.now() - operationTime).toFixed(0)}ms`,
+      );
     } catch (error: unknown) {
       // Cancellation is user-initiated. The cancel handler reports it,
       // so don't also surface a generic failure message.
@@ -1163,17 +1224,116 @@ export class JJGraphWebview implements vscode.WebviewViewProvider {
     }
   }
 
+  /**
+   * Runs a repository operation through the operation queue. When `transform` can predict the
+   * resulting graph, the prediction is rendered immediately and kept on top of incoming snapshots
+   * until the operation completed and the graph was refreshed. If the operation fails, all
+   * predictions and the operations queued behind it are dropped and the real state is reloaded.
+   * Operations whose outcome cannot be predicted (e.g. ones that need the immutable-commit prompt)
+   * still run in queue order, just without the immediate update.
+   */
+  private runOptimistic(errorLabel: string, fn: () => Promise<unknown>, transform: OptimisticTransform): Promise<void> {
+    if (this.refuseDuringExclusiveOperation()) {
+      return Promise.resolve();
+    }
+    const base = this.lastSnapshot ? this.applyPendingTransforms(this.lastSnapshot.entries) : undefined;
+    const predicted = base !== undefined && transform(base) !== undefined;
+    const generation = this.operationGeneration;
+    if (predicted) {
+      this.pendingTransforms.push(transform);
+      void this.rerender();
+    }
+    const removeTransform = () => {
+      this.pendingTransforms = this.pendingTransforms.filter((t) => t !== transform);
+    };
+
+    const run = this.operationQueue.then(async () => {
+      if (generation !== this.operationGeneration) {
+        removeTransform();
+        await this.rerender();
+        return;
+      }
+      await vscode.window.withProgress({ location: { viewId: "jjGraphWebview" } }, async () => {
+        const startTime = performance.now();
+        try {
+          await fn();
+          const operationTime = performance.now();
+          await this.refresh();
+          logger.debug(
+            `timing: ${errorLabel} (optimistic=${predicted}) operation=${(operationTime - startTime).toFixed(0)}ms refresh=${(performance.now() - operationTime).toFixed(0)}ms`,
+          );
+          removeTransform();
+          await this.rerender();
+        } catch (error: unknown) {
+          this.operationGeneration++;
+          this.pendingTransforms = [];
+          // Cancellation is user-initiated. The cancel handler reports it,
+          // so don't also surface a generic failure message.
+          if (!(error instanceof CancelledError)) {
+            showErrorMessage(`Failed to ${errorLabel}`, error);
+          }
+          await this.refresh();
+          await this.rerender();
+        }
+      });
+    });
+    this.operationQueue = run.catch((error: unknown) => {
+      logger.error(`Graph operation failed: ${error instanceof Error ? error.message : String(error)}`);
+    });
+    return this.operationQueue;
+  }
+
+  /**
+   * Memoizes a repository lookup made while rendering. Lookups read at a fixed operation, so their
+   * results only change with the operation ID; failed lookups are retried on the next render.
+   */
+  private cachedLookup<T>(
+    repository: JJRepository,
+    operationId: string,
+    key: string,
+    load: () => Promise<T>,
+  ): Promise<T> {
+    if (
+      this.renderLookups?.repositoryRoot !== repository.repositoryRoot ||
+      this.renderLookups.operationId !== operationId
+    ) {
+      this.renderLookups = { repositoryRoot: repository.repositoryRoot, operationId, values: new Map() };
+    }
+    const values = this.renderLookups.values;
+    let value = values.get(key) as Promise<T> | undefined;
+    if (!value) {
+      const loaded = load();
+      value = loaded;
+      values.set(key, loaded);
+      loaded.catch(() => {
+        if (values.get(key) === loaded) {
+          values.delete(key);
+        }
+      });
+    }
+    return value;
+  }
+
+  private applyPendingTransforms(entries: LogEntry[]): LogEntry[] {
+    return this.pendingTransforms.reduce((current, transform) => transform(current) ?? current, entries);
+  }
+
   private async confirmAndExecute(
     prompt: string,
     confirmLabel: string,
     errorLabel: string,
     fn: () => Promise<unknown>,
+    transform?: OptimisticTransform,
   ): Promise<void> {
     const confirm = await vscode.window.showWarningMessage(prompt, { modal: true }, confirmLabel);
     if (confirm !== confirmLabel) {
       return;
     }
-    await this.withRefresh(errorLabel, fn);
+    if (transform) {
+      await this.runOptimistic(errorLabel, fn, transform);
+    } else {
+      await this.withRefresh(errorLabel, fn);
+    }
   }
 
   /**
@@ -1272,9 +1432,11 @@ export class JJGraphWebview implements vscode.WebviewViewProvider {
       return;
     }
 
+    const renderId = ++this.renderSequence;
     try {
+      const startTime = performance.now();
       const operationId = snapshot.operationId;
-      const rawEntries = snapshot.entries;
+      const rawEntries = this.applyPendingTransforms(snapshot.entries);
       const config = vscode.workspace.getConfiguration("juju");
       const graphStyle = config.get<string>("graphStyle") || "full";
       const showChangedFiles = config.get<boolean>("showChangedFiles") ?? true;
@@ -1322,7 +1484,9 @@ export class JJGraphWebview implements vscode.WebviewViewProvider {
         }
       }
       if (unsyncedBookmarks.size > 0) {
-        const bookmarksWithPushTargets = await repository.getBookmarksWithUnsyncedNonGitRemotes(operationId);
+        const bookmarksWithPushTargets = await this.cachedLookup(repository, operationId, "bookmarks", () =>
+          repository.getBookmarksWithUnsyncedNonGitRemotes(operationId),
+        );
         for (const change of changes) {
           if (change.branchType === "~") {
             continue;
@@ -1349,7 +1513,9 @@ export class JJGraphWebview implements vscode.WebviewViewProvider {
           }
         }
         if (unsyncedTags.size > 0) {
-          const tagsWithPushTargets = await repository.getTagsWithUnsyncedNonGitRemotes(operationId);
+          const tagsWithPushTargets = await this.cachedLookup(repository, operationId, "tags", () =>
+            repository.getTagsWithUnsyncedNonGitRemotes(operationId),
+          );
           for (const change of changes) {
             if (change.branchType === "~") {
               continue;
@@ -1372,7 +1538,9 @@ export class JJGraphWebview implements vscode.WebviewViewProvider {
       const workspace = currentWorkspaceFromEntries(rawEntries);
       if (workspace.lookupNeeded) {
         try {
-          currentWorkspace = await repository.getCurrentWorkspaceName(operationId);
+          currentWorkspace = await this.cachedLookup(repository, operationId, "workspace", () =>
+            repository.getCurrentWorkspaceName(operationId),
+          );
         } catch (error: unknown) {
           logger.warn(
             `Failed to determine the current workspace: ${error instanceof Error ? error.message : String(error)}`,
@@ -1398,15 +1566,19 @@ export class JJGraphWebview implements vscode.WebviewViewProvider {
         supportsTagTracking,
         currentWorkspace,
       };
-      if (this.lastSnapshot !== snapshot || this.repository !== repository) {
+      if (this.lastSnapshot !== snapshot || this.repository !== repository || this.renderSequence !== renderId) {
         return;
       }
       this.lastGraphMessage = msg;
       this.postMessageToWebview(msg);
+      const postedTime = performance.now();
       // Notify listeners whenever the resolved selection changed: selected changes may have
       // been removed (e.g. abandoned) or rewritten (same change ID, new commit ID), and both
       // the SCM view and the Details view must follow.
       await this.fireSelection(this.resolveSelection(Array.from(this.selectedNodes)));
+      logger.debug(
+        `timing: graph render build=${(postedTime - startTime).toFixed(0)}ms selection=${(performance.now() - postedTime).toFixed(0)}ms changes=${changes.length}`,
+      );
     } catch (error) {
       logger.error(`Failed to render graph: ${error instanceof Error ? error.message : String(error)}`);
       this.postMessageToWebview({ command: "showErrorState" });
