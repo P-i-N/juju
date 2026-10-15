@@ -18,6 +18,7 @@ export function buildEdgeSegments(
   rowYList: number[],
   bottomY: number,
   arcRadius: number,
+  rowGapAbove: number[] = [],
 ): PathSegment[] | null {
   const segments: PathSegment[] = [];
 
@@ -42,6 +43,8 @@ export function buildEdgeSegments(
 
     const fromX = getLaneX(segFromLane);
     const toX = getLaneX(segToLane);
+    const turnFromY = Math.min(segFromY + (rowGapAbove[segToRow] ?? 0), segToY);
+    const straightDown = turnFromY > segFromY ? ` V ${turnFromY}` : "";
 
     if (segFromLane === segToLane) {
       segments.push({
@@ -55,11 +58,11 @@ export function buildEdgeSegments(
     } else if (Math.abs(segFromLane - segToLane) === 1) {
       const c = 18;
       segments.push({
-        d: `M ${fromX} ${segFromY} C ${fromX} ${segFromY + c} ${toX} ${segToY - c} ${toX} ${segToY}`,
+        d: `M ${fromX} ${segFromY}${straightDown} C ${fromX} ${turnFromY + c} ${toX} ${segToY - c} ${toX} ${segToY}`,
         vertical: null,
       });
     } else {
-      const prevToY = segToRow > 0 ? rowYList[segToRow - 1] : segToY - EDGE_EXTENSION;
+      const prevToY = segToRow > 0 ? turnFromY : segToY - EDGE_EXTENSION;
       const horizontalY = (segToY + prevToY) / 2;
       const r = arcRadius;
       const goingRight = toX > fromX;

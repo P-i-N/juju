@@ -45,6 +45,28 @@ describe("buildEdgeSegments", () => {
     assert.strictEqual(distant[0].vertical, null);
   });
 
+  it("runs straight down past rows inserted below the source before turning", () => {
+    const adjacent = buildEdgeSegments(
+      makeEdge({ lanePath: [0, 1], fromRow: 0, toRow: 1 }),
+      [0, 200],
+      300,
+      12,
+      [0, 160],
+    );
+    assert.ok(adjacent);
+    assert.match(adjacent[0].d, /^M (\S+) 0 V 160 C \1 178 /);
+
+    const distant = buildEdgeSegments(
+      makeEdge({ lanePath: [0, 3], fromRow: 0, toRow: 1 }),
+      [0, 200],
+      300,
+      12,
+      [0, 160],
+    );
+    assert.ok(distant);
+    assert.match(distant[0].d, /^M \S+ 0 V 168 A /);
+  });
+
   it("extends the last segment to the bottom for edges leaving the visible set", () => {
     const segments = buildEdgeSegments(
       makeEdge({ lanePath: [0, 0], fromRow: 0, toRow: 1, extendsToBottom: true }),

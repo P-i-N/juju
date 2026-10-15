@@ -49,7 +49,12 @@ export function ConnectionLines() {
 
     const svgRect = svg.getBoundingClientRect();
     const rowYList: number[] = [];
+    const rowGapAbove: number[] = [];
+    let prevRowBottom: number | undefined;
     nodes.forEach((node, i) => {
+      const rowRect = node.getBoundingClientRect();
+      rowGapAbove.push(prevRowBottom === undefined ? 0 : Math.max(0, rowRect.top - prevRowBottom));
+      prevRowBottom = rowRect.bottom;
       const isElided = currentChanges.value[i]?.branchType === "~";
       const changeIdEl = node.querySelector(`[data-role="change-id"]`);
       const refEl = (isElided ? node : (changeIdEl ?? node)) as HTMLElement;
@@ -68,7 +73,7 @@ export function ConnectionLines() {
     const result: PathData[] = [];
     const pairOccurrences = new Map<string, number>();
     for (const edge of sortedEdges) {
-      const segments = buildEdgeSegments(edge, rowYList, bottomY, 12);
+      const segments = buildEdgeSegments(edge, rowYList, bottomY, 12, rowGapAbove);
       if (segments) {
         const base = `${edge.fromId}->${edge.toId}`;
         const occurrence = pairOccurrences.get(base) ?? 0;
