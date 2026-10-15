@@ -135,8 +135,8 @@ export type WebviewToExtensionMessage =
   | { command: "dragEnded" }
   | { command: "graphPointerDown" }
   | { command: "fetchDiffStats"; changeId: FullChangeId }
-  | { command: "fetchChangedFiles"; commitId: string }
-  | { command: "fetchFileHunks"; commitId: string; path: string; renamedFrom?: string }
+  | { command: "fetchChangedFiles"; commitId: string; sentAt: number }
+  | { command: "fetchFileHunks"; commitId: string; path: string; renamedFrom?: string; sentAt: number }
   | {
       command: "moveHunks";
       fromChangeId: FullChangeId;

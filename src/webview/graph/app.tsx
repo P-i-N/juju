@@ -145,7 +145,7 @@ export function App() {
       const next = new Map(cache);
       for (const change of missing) {
         next.set(change.commitId, "loading");
-        postMessage({ command: "fetchChangedFiles", commitId: change.commitId });
+        postMessage({ command: "fetchChangedFiles", commitId: change.commitId, sentAt: Date.now() });
       }
       changedFilesCache.value = next;
     });
@@ -184,6 +184,7 @@ export function App() {
             commitId: change.commitId,
             path: file.path,
             ...(file.renamedFrom ? { renamedFrom: file.renamedFrom } : {}),
+            sentAt: Date.now(),
           });
         }
       }

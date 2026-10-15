@@ -899,7 +899,7 @@ export class JJGraphWebview implements vscode.WebviewViewProvider {
           });
         }
         logger.debug(
-          `timing: changed files files=${(filesTime - startTime).toFixed(0)}ms lineCounts=${(countsTime - startTime).toFixed(0)}ms count=${files?.length ?? "error"}`,
+          `timing: changed files queued=${(Date.now() - message.sentAt - (performance.now() - startTime)).toFixed(0)}ms files=${(filesTime - startTime).toFixed(0)}ms lineCounts=${(countsTime - startTime).toFixed(0)}ms count=${files?.length ?? "error"}`,
         );
         break;
       }
@@ -914,12 +914,17 @@ export class JJGraphWebview implements vscode.WebviewViewProvider {
         );
         break;
       case "fetchFileHunks": {
+        const queued = Date.now() - message.sentAt;
+        const startTime = performance.now();
         let hunks: FileHunk[] | null = null;
         try {
           hunks = await repo.getFileHunks(message.commitId, message.path, message.renamedFrom);
         } catch (error: unknown) {
           logger.warn(`Failed to load hunks: ${error instanceof Error ? error.message : String(error)}`);
         }
+        logger.debug(
+          `timing: file hunks queued=${queued}ms load=${(performance.now() - startTime).toFixed(0)}ms hunks=${hunks?.length ?? "error"}`,
+        );
         this.postMessageToWebview({
           command: "fileHunksResponse",
           commitId: message.commitId,
