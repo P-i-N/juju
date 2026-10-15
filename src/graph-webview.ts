@@ -29,7 +29,9 @@ import {
 } from "./graph-protocol";
 import {
   classifyEdges,
+  collapsedNodeId,
   collectCollapsedDescendants,
+  insertCollapsedNodes,
   insertSyntheticNodes,
   getParentUniqueId,
   getUniqueEntryId,
@@ -321,8 +323,10 @@ export class JJGraphWebview implements vscode.WebviewViewProvider {
       case "expandElided": {
         const hiddenIds = this.elidedIdsByFakeId.get(message.fakeId);
         if (hiddenIds) {
-          for (const id of hiddenIds) {
-            this.expandedCommitIds.add(id);
+          if (!message.fakeId.startsWith(collapsedNodeId(""))) {
+            for (const id of hiddenIds) {
+              this.expandedCommitIds.add(id);
+            }
           }
           for (const [rootId, descendants] of this.collapsedDescendants) {
             if (hiddenIds.some((id) => descendants.has(id))) {
@@ -1595,7 +1599,10 @@ export class JJGraphWebview implements vscode.WebviewViewProvider {
         forceHiddenIds,
         elidedVisibleImmutableParents: getElidedVisibleImmutableParents(repository.repositoryRoot),
       });
-      const entriesWithSynthetics = insertSyntheticNodes(rawEntries, edges, visibleIds, reachableVisibleFrom);
+      const entriesWithSynthetics = insertCollapsedNodes(
+        insertSyntheticNodes(rawEntries, edges, visibleIds, reachableVisibleFrom),
+        this.collapsedDescendants,
+      );
       this.elidedIdsByFakeId = new Map(
         entriesWithSynthetics.flatMap((e) => (e.elided_ids ? [[e.change_id, e.elided_ids] as const] : [])),
       );

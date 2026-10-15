@@ -652,4 +652,38 @@ export function collectCollapsedDescendants(
   return result;
 }
 
+export function insertCollapsedNodes(
+  entries: LogEntry[],
+  collapsedDescendants: ReadonlyMap<string, ReadonlySet<string>>,
+): LogEntry[] {
+  const covered = new Set([...entries.map(getUniqueEntryId), ...entries.flatMap((e) => e.elided_ids ?? [])]);
+  const result: LogEntry[] = [];
+  for (const entry of entries) {
+    const id = getUniqueEntryId(entry);
+    const descendants = collapsedDescendants.get(id);
+    if (descendants) {
+      const hiddenIds = [...descendants].filter((d) => !covered.has(d));
+      if (hiddenIds.length > 0) {
+        for (const d of hiddenIds) {
+          covered.add(d);
+        }
+        result.push(
+          createSyntheticEntry({
+            id: collapsedNodeId(id),
+            targetId: id,
+            edgeType: "indirect",
+            hiddenIds,
+          }),
+        );
+      }
+    }
+    result.push(entry);
+  }
+  return result;
+}
+
+export function collapsedNodeId(rootId: string): string {
+  return `~collapsed~${rootId}`;
+}
+
 export { getUniqueEntryId, getParentUniqueId };

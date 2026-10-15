@@ -4,6 +4,7 @@ import assert from "node:assert";
 import {
   classifyEdges,
   collectCollapsedDescendants,
+  insertCollapsedNodes,
   insertSyntheticNodes,
   getUniqueEntryId,
   getParentUniqueId,
@@ -824,6 +825,53 @@ describe("elidedEdges", () => {
         ["C", "~C~A", "A"],
       );
       assert.deepStrictEqual(result[1].elided_ids, ["B"]);
+    });
+
+    it("inserts a hidden-count node above a collapsed entry", () => {
+      const entries: LogEntry[] = [
+        createEntry("W", [parentRef("R")], { current_working_copy: true }),
+        createEntry("C", [parentRef("B")]),
+        createEntry("B", [parentRef("A")]),
+        createEntry("A", [parentRef("R")]),
+        createEntry("R", []),
+      ];
+      const collapsed = collectCollapsedDescendants(entries, new Set(["A"]));
+      const forceHiddenIds = collapsed.get("A")!;
+      const { edges, visibleIds, reachableVisibleFrom } = classifyEdges(entries, { forceHiddenIds });
+
+      const result = insertCollapsedNodes(
+        insertSyntheticNodes(entries, edges, visibleIds, reachableVisibleFrom),
+        collapsed,
+      );
+
+      assert.deepStrictEqual(
+        result.map((e) => e.change_id),
+        ["W", "~collapsed~A", "A", "R"],
+      );
+      assert.deepStrictEqual([...result[1].elided_ids!].sort(), ["B", "C"]);
+      assert.deepStrictEqual(result[1].parents, [parentRef("A")]);
+    });
+
+    it("does not count descendants already shown by another hidden-count node", () => {
+      const entries: LogEntry[] = [
+        createEntry("C", [parentRef("B")], { current_working_copy: true }),
+        createEntry("B", [parentRef("A")]),
+        createEntry("A", []),
+      ];
+      const collapsed = collectCollapsedDescendants(entries, new Set(["A"]));
+      const { edges, visibleIds, reachableVisibleFrom } = classifyEdges(entries, {
+        forceHiddenIds: collapsed.get("A")!,
+      });
+
+      const result = insertCollapsedNodes(
+        insertSyntheticNodes(entries, edges, visibleIds, reachableVisibleFrom),
+        collapsed,
+      );
+
+      assert.deepStrictEqual(
+        result.map((e) => e.change_id),
+        ["C", "~C~A", "A"],
+      );
     });
   });
 });
