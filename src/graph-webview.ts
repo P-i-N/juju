@@ -16,7 +16,7 @@ import {
   shouldOpenWorkingCopyRightSide,
   toForwardSlashes,
 } from "./utils";
-import type { ChangeId, FullChangeId } from "./types";
+import type { ChangeId, FileStatus, FullChangeId } from "./types";
 import { assignLanes } from "./lane-assigner";
 import {
   getUniqueId,
@@ -45,6 +45,10 @@ import { DEFAULT_CHANGE_DOUBLE_CLICK_ACTION, resolveDoubleClickAction } from "./
 import { abandonEntries, rebaseEntries, type OptimisticTransform } from "./optimistic-graph";
 
 const rootChangeId = "z".repeat(32);
+const CHANGED_FILES_CACHE_LIMIT = 2000;
+const CHANGED_FILES_PREFETCH_BATCH_SIZE = 100;
+
+type LineCounts = Map<string, { added: number; removed: number }>;
 const GRAPH_TAB_VIEW_TYPE = "jjGraphTab";
 
 export interface GraphSelection {
@@ -99,6 +103,8 @@ export class JJGraphWebview implements vscode.WebviewViewProvider {
   private operationGeneration = 0;
   private renderSequence = 0;
   private exclusiveOperation: { label: string; promise: Promise<void> } | undefined;
+  private changedFilesCache = new Map<string, Promise<ChangedFile[]>>();
+  private lineCountsCache = new Map<string, Promise<LineCounts>>();
   private renderLookups:
     { repositoryRoot: string; operationId: string; values: Map<string, Promise<unknown>> } | undefined;
 
@@ -863,32 +869,38 @@ export class JJGraphWebview implements vscode.WebviewViewProvider {
         }
         break;
       case "fetchChangedFiles": {
+        // The file list is cheap and sent as soon as it is known; line counts need the full diff,
+        // so they are loaded concurrently and sent separately once available.
+        // Both are usually already prefetched for visible changes (see prefetchChangedFiles).
+        const startTime = performance.now();
+        let countsTime = startTime;
+        const lineCountsPromise = this.loadLineCounts(repo, message.commitId)
+          .catch((error: unknown) => {
+            logger.warn(`Failed to load line counts: ${error instanceof Error ? error.message : String(error)}`);
+            return new Map<string, { added: number; removed: number }>();
+          })
+          .finally(() => {
+            countsTime = performance.now();
+          });
         let files: ChangedFile[] | null = null;
         try {
-          const [changedFiles, lineCounts] = await Promise.all([
-            repo.getChangedFiles(message.commitId),
-            repo.getChangedFileLineCounts(message.commitId).catch((error: unknown) => {
-              logger.warn(`Failed to load line counts: ${error instanceof Error ? error.message : String(error)}`);
-              return new Map<string, { added: number; removed: number }>();
-            }),
-          ]);
-          files = changedFiles.map((f) => {
-            const relativePath = toForwardSlashes(repositoryRelativePath(repo.repositoryRoot, f.path));
-            const counts = lineCounts.get(relativePath);
-            return {
-              type: f.type,
-              path: relativePath,
-              ...(f.renamedFrom
-                ? { renamedFrom: toForwardSlashes(repositoryRelativePath(repo.repositoryRoot, f.renamedFrom)) }
-                : {}),
-              conflict: f.isConflict ?? f.type === "X",
-              ...(counts ? { linesAdded: counts.added, linesRemoved: counts.removed } : {}),
-            };
-          });
+          files = await this.loadChangedFiles(repo, message.commitId);
         } catch (error: unknown) {
           logger.warn(`Failed to load changed files: ${error instanceof Error ? error.message : String(error)}`);
         }
+        const filesTime = performance.now();
         this.postMessageToWebview({ command: "changedFilesResponse", commitId: message.commitId, files });
+        const lineCounts = await lineCountsPromise;
+        if (files && lineCounts.size > 0) {
+          this.postMessageToWebview({
+            command: "changedFileLineCountsResponse",
+            commitId: message.commitId,
+            counts: Object.fromEntries(lineCounts),
+          });
+        }
+        logger.debug(
+          `timing: changed files files=${(filesTime - startTime).toFixed(0)}ms lineCounts=${(countsTime - startTime).toFixed(0)}ms count=${files?.length ?? "error"}`,
+        );
         break;
       }
       case "moveHunks":
@@ -1161,6 +1173,8 @@ export class JJGraphWebview implements vscode.WebviewViewProvider {
       this.lastGraphMessage = undefined;
       this.lastSnapshot = undefined;
       this.pendingTransforms = [];
+      this.changedFilesCache.clear();
+      this.lineCountsCache.clear();
       await this.refresh();
     }
   }
@@ -1312,6 +1326,115 @@ export class JJGraphWebview implements vscode.WebviewViewProvider {
       });
     }
     return value;
+  }
+
+  private toChangedFiles(repo: JJRepository, fileStatuses: FileStatus[]): ChangedFile[] {
+    return fileStatuses.map((f) => ({
+      type: f.type,
+      path: toForwardSlashes(repositoryRelativePath(repo.repositoryRoot, f.path)),
+      ...(f.renamedFrom
+        ? { renamedFrom: toForwardSlashes(repositoryRelativePath(repo.repositoryRoot, f.renamedFrom)) }
+        : {}),
+      conflict: f.isConflict ?? f.type === "X",
+    }));
+  }
+
+  /**
+   * Stores a pending load in a commit-id keyed cache. Commit ids are content addressed, so cached
+   * data never goes stale; failed loads are evicted so they are retried, and the oldest entries
+   * are dropped beyond CHANGED_FILES_CACHE_LIMIT.
+   */
+  private cacheByCommit<T>(cache: Map<string, Promise<T>>, commitId: string, promise: Promise<T>): Promise<T> {
+    cache.delete(commitId);
+    cache.set(commitId, promise);
+    promise.catch(() => {
+      if (cache.get(commitId) === promise) {
+        cache.delete(commitId);
+      }
+    });
+    while (cache.size > CHANGED_FILES_CACHE_LIMIT) {
+      cache.delete(cache.keys().next().value!);
+    }
+    return promise;
+  }
+
+  private loadChangedFiles(repo: JJRepository, commitId: string): Promise<ChangedFile[]> {
+    const load = () =>
+      this.cacheByCommit(
+        this.changedFilesCache,
+        commitId,
+        repo.getChangedFiles(commitId).then((files) => this.toChangedFiles(repo, files)),
+      );
+    return this.changedFilesCache.get(commitId)?.catch(load) ?? load();
+  }
+
+  private loadLineCounts(repo: JJRepository, commitId: string): Promise<LineCounts> {
+    const load = () => this.cacheByCommit(this.lineCountsCache, commitId, repo.getChangedFileLineCounts(commitId));
+    return this.lineCountsCache.get(commitId)?.catch(load) ?? load();
+  }
+
+  /**
+   * Loads the changed files and line counts of all visible changes in the background, a batch of
+   * commits per jj invocation, so that expanding a change can show them without starting jj.
+   */
+  private prefetchChangedFiles(repo: JJRepository, changes: ChangeNode[]): void {
+    const commitIds = [...new Set(changes.flatMap((c) => (c.branchType === "~" ? [] : [c.commitId])))];
+    const missingFiles = commitIds.filter((id) => !this.changedFilesCache.has(id));
+    const missingCounts = commitIds.filter((id) => !this.lineCountsCache.has(id));
+    for (let i = 0; i < missingFiles.length; i += CHANGED_FILES_PREFETCH_BATCH_SIZE) {
+      const ids = missingFiles.slice(i, i + CHANGED_FILES_PREFETCH_BATCH_SIZE);
+      const startTime = performance.now();
+      const batch = repo.getChangedFilesBatch(ids);
+      batch.then(
+        () =>
+          logger.debug(
+            `timing: prefetch changed files ${(performance.now() - startTime).toFixed(0)}ms commits=${ids.length}`,
+          ),
+        (error: unknown) =>
+          logger.warn(`Failed to prefetch changed files: ${error instanceof Error ? error.message : String(error)}`),
+      );
+      for (const id of ids) {
+        void this.cacheByCommit(
+          this.changedFilesCache,
+          id,
+          batch.then((files) => {
+            const fileStatuses = files.get(id);
+            if (!fileStatuses) {
+              throw new Error(`Commit ${id} missing from prefetched changed files`);
+            }
+            return this.toChangedFiles(repo, fileStatuses);
+          }),
+        );
+      }
+    }
+    for (let i = 0; i < missingCounts.length; i += CHANGED_FILES_PREFETCH_BATCH_SIZE) {
+      const ids = missingCounts.slice(i, i + CHANGED_FILES_PREFETCH_BATCH_SIZE);
+      const startTime = performance.now();
+      const batch = repo.getChangedFileLineCountsBatch(ids);
+      batch.then(
+        (counts) =>
+          counts &&
+          logger.debug(
+            `timing: prefetch line counts ${(performance.now() - startTime).toFixed(0)}ms commits=${ids.length}`,
+          ),
+        (error: unknown) =>
+          logger.warn(`Failed to prefetch line counts: ${error instanceof Error ? error.message : String(error)}`),
+      );
+      for (const id of ids) {
+        void this.cacheByCommit(
+          this.lineCountsCache,
+          id,
+          batch.then((counts) => {
+            const lineCounts = counts?.get(id);
+            if (!lineCounts) {
+              // Unsupported by this jj version: loadLineCounts falls back to a per-commit diff.
+              throw new Error(`Line counts of commit ${id} were not prefetched`);
+            }
+            return lineCounts;
+          }),
+        );
+      }
+    }
   }
 
   private applyPendingTransforms(entries: LogEntry[]): LogEntry[] {
@@ -1570,6 +1693,9 @@ export class JJGraphWebview implements vscode.WebviewViewProvider {
         return;
       }
       this.lastGraphMessage = msg;
+      if (showChangedFiles) {
+        this.prefetchChangedFiles(repository, changes);
+      }
       this.postMessageToWebview(msg);
       const postedTime = performance.now();
       // Notify listeners whenever the resolved selection changed: selected changes may have

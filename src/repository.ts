@@ -156,6 +156,7 @@ export class JJRepository {
 
   // Latest operation id observed for this repository
   private lastKnownOperationId: string | undefined;
+  private diffStatTemplateSupported = true;
 
   /**
    * Short-lived memo for show()/showAll() results (see {@link JJRepository.showAll}),
@@ -1299,6 +1300,61 @@ export class JJRepository {
    * Fetches the per-file added/removed line counts of the commit with the given full commit id,
    * keyed by repository-relative path (forward slashes). Binary files are omitted.
    */
+  /**
+   * Fetches the changed files of several commits (by full commit id) with a single jj invocation.
+   */
+  async getChangedFilesBatch(commitIds: string[]): Promise<Map<string, FileStatus[]>> {
+    const entries = await this.log(commitIds.join("|"), commitIds.length, { includeFiles: true });
+    return new Map(entries.map((e) => [e.commit_id, e.fileStatuses ?? []]));
+  }
+
+  /**
+   * Fetches the per-file added/removed line counts of several commits (by full commit id) with a
+   * single jj invocation, keyed by commit id and then by repository-relative path with forward
+   * slashes. Returns undefined when the installed jj cannot report per-file diff statistics in
+   * templates; callers then fall back to {@link getChangedFileLineCounts}.
+   */
+  async getChangedFileLineCountsBatch(
+    commitIds: string[],
+  ): Promise<Map<string, Map<string, { added: number; removed: number }>> | undefined> {
+    if (!this.diffStatTemplateSupported) {
+      return undefined;
+    }
+    const template =
+      'self.diff().stat().files().map(|f| commit_id ++ "\\0" ++ f.path().display() ++ "\\0" ++ f.lines_added() ++ "\\0" ++ f.lines_removed() ++ "\\n").join("")';
+    let output: string;
+    try {
+      output = (
+        await this.jjCommandRead([
+          "log",
+          "--no-graph",
+          "-r",
+          commitIds.join("|"),
+          "-n",
+          commitIds.length.toString(),
+          "-T",
+          template,
+        ])
+      ).toString();
+    } catch (error) {
+      if (error instanceof Error && /template/i.test(error.message)) {
+        logger.info("jj cannot report per-file diff statistics in templates; loading line counts per change");
+        this.diffStatTemplateSupported = false;
+        return undefined;
+      }
+      throw error;
+    }
+    const result = new Map(commitIds.map((id) => [id, new Map<string, { added: number; removed: number }>()]));
+    for (const line of output.split("\n")) {
+      const [commitId, filePath, added, removed] = line.split("\0");
+      if (removed === undefined) {
+        continue;
+      }
+      result.get(commitId)?.set(toForwardSlashes(filePath), { added: Number(added), removed: Number(removed) });
+    }
+    return result;
+  }
+
   async getChangedFileLineCounts(commitId: string): Promise<Map<string, { added: number; removed: number }>> {
     const counts = parseGitDiffLineCounts((await this.jjCommandRead(["diff", "-r", commitId, "--git"])).toString());
     const result = new Map<string, { added: number; removed: number }>();

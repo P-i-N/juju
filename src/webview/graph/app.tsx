@@ -275,6 +275,25 @@ export function App() {
           }
           break;
         }
+        case "changedFileLineCountsResponse": {
+          const files = changedFilesCache.value.get(message.commitId);
+          if (!Array.isArray(files)) {
+            break;
+          }
+          const withCounts = files.map((file) => {
+            const counts = message.counts[file.path];
+            return counts ? { ...file, linesAdded: counts.added, linesRemoved: counts.removed } : file;
+          });
+          const next = new Map(changedFilesCache.value);
+          next.set(message.commitId, withCounts);
+          changedFilesCache.value = next;
+          const last = new Map(lastChangedFiles.value);
+          for (const change of changesWithCommit(message.commitId)) {
+            last.set(change.id.changeId, withCounts);
+          }
+          lastChangedFiles.value = last;
+          break;
+        }
         case "bookmarkTrackingRemotesResponse": {
           const state = pillContextMenu.value;
           if (state && state.type === "bookmark" && state.name === message.bookmark && state.pendingRemotes) {

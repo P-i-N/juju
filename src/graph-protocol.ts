@@ -247,6 +247,11 @@ export type ExtensionToWebviewMessage =
   | { command: "setSelection"; selectedNodes: FullChangeId[] }
   | { command: "diffStatsResponse"; changeId: FullChangeId; stats: DiffStats }
   | { command: "changedFilesResponse"; commitId: string; files: ChangedFile[] | null }
+  | {
+      command: "changedFileLineCountsResponse";
+      commitId: string;
+      counts: Record<string, { added: number; removed: number }>;
+    }
   | { command: "fileHunksResponse"; commitId: string; path: string; hunks: FileHunk[] | null }
   | {
       command: "bookmarkTrackingRemotesResponse";
