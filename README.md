@@ -12,47 +12,86 @@
 
 ### 📂 Expandable Commits
 
-Every change in the graph can be expanded to show the files it touches, grouped by directory, like `jj log -s`. Click
-the arrow next to a change (or press `ArrowRight` / `ArrowLeft` on the selected change) to expand or collapse it. Files
-are selectable rows: click, `Ctrl`+click, and `Shift`+click select them, double-click opens the diff, and the context
-menu offers the same actions as the Source Control view, including discarding the changes of the selected files.
+Every change in the graph can be expanded to show the files it touches, grouped by directory, like `jj log -s`, with the
+number of added and removed lines of each file. Click the arrow next to a change (or press `ArrowRight` / `ArrowLeft` on
+the selected change) to expand or collapse it. Files are selectable rows: click, `Ctrl`+click, and `Shift`+click select
+them, double-click opens the diff, and the context menu offers the same actions as the Source Control view, including
+discarding the changes of the selected files.
 
 ![Expanding commits in the graph to show their changed files](images/expandable-commits.gif)
 
 ### 🖱️ Dragging Changed Files
 
 Drag a changed file, or several selected files, onto another change to move their changes there. Hold `Ctrl` (`Cmd` on
-macOS) while dropping a file onto the edge between two changes to move it into a brand-new change at that place, without
-leaving your current working copy.
+macOS) while dropping files onto the edge between two changes to choose between **Move to New Change** and **Copy to New
+Change**, which puts them into a brand-new change at that place without leaving your current working copy.
 
 ![Dragging changed files between changes](images/dragging-changed-files.gif)
+
+### ✂️ Moving Individual Hunks
+
+A modified file expands further into its hunks, the groups of changed lines, each with its line numbers and a preview.
+Drag one or more hunks onto another change and pick **Move** or **Duplicate** to take just those lines there, without
+opening the split view. Double-click a hunk to open the diff at that line.
+
+![Moving a single hunk to another change](images/moving-hunks.gif)
 
 ### ➕ Inserting Changes in Between
 
 Hold `Ctrl` (`Cmd` on macOS) and the edges between changes light up as you hover them:
 
-- **`Ctrl`+drag** a change onto an edge to rebase it exactly there: in between two changes, onto a change (top edge) or
-  before a change (bottom edge)
+- **`Ctrl`+drag** a change onto an edge and choose **Rebase**, **Rebase With Descendants**, or **Duplicate** to put it
+  exactly there: in between two changes, onto a change (top edge), or before a change (bottom edge)
 - **`Ctrl`+double-click** an edge to insert a new empty change there (`jj new -A` / `jj new -B`) and start working in it
 
 ![Moving a change between two others and inserting a new change](images/inserting-changes.gif)
 
-### 🗂️ Graph in a Window or Editor Tab
+### ✏️ Quick Actions on Hover
+
+Hovering a change shows two buttons: the pencil edits the first line of its description in place, and the eye hides
+everything that descends from it, to focus on one part of a busy graph (click it again to bring them back). Hidden
+descendants and elided commits show how many commits they stand for, and double-clicking an elided item expands it.
+
+![Editing a description and hiding descendants from the graph](images/change-hover-actions.gif)
+
+### ⚔️ Resolving Conflicts Anywhere
+
+In jj, a conflict can be committed and resolved later, and it is carried along to every descendant. Juju lets you
+resolve it right where it happened: double-click a conflicted file of any change in the graph to open it in the VS Code
+merge editor, without editing that change. Once you save and close the editor, the result is written into the change and
+its descendants are rebased, so the conflict disappears from all of them while your working copy stays where it is.
+
+![Resolving a conflict in an older change from the graph](images/resolving-conflicts.gif)
+
+### 🪟 Graph Windows and Tabs
 
 Open the graph in a window of its own with the "Open Graph in Window" button in the JJ Graph toolbar (or the
 `Jujutsu: Open Graph in Window` command) to give it all the room it needs, e.g. on a second monitor. The
-`Jujutsu: Open Graph in Tab` command opens it in a regular editor tab instead. Both have the full graph toolbar, and
-their selection stays in sync with the graph in the side bar.
+`Jujutsu: Open Graph in Tab` command opens another graph in an editor tab every time it runs. Every graph has the full
+toolbar, and they all share the same selection.
+
+Changes, bookmarks, files, and hunks can be dragged from one graph to another, e.g. from the side bar into a graph
+window. VS Code keeps a drag that crossed other parts of the workbench away from a webview unless `Shift` is held, so a
+graph that cannot receive the drag yet says **Hold Shift to Drop Here**.
+
+![Dragging a file from the side bar into a graph window](images/graph-windows.gif)
 
 ![Opening the graph in an editor tab](images/graph-in-tab.gif)
+
+### ⚡ Faster Graph
+
+- Rebasing, abandoning, and moving files between changes update the graph immediately, while jj runs in the background;
+  if a command fails, the graph returns to the real state
+- The changed files and line counts of the visible changes are loaded in the background, so expanding a change is
+  instant
+- The graph, Source Control view, and operation log are refreshed from a single repository snapshot, which keeps them
+  consistent and fast
 
 ### 🔧 Smaller Improvements
 
 - Double-clicking a change runs `jj edit` on changes without a description and `jj new` otherwise (configurable with
   `juju.changeDoubleClickAction`)
 - Dragged bookmarks are highlighted and previewed on the drop target
-- The graph, Source Control view, and operation log are refreshed from a single repository snapshot, which keeps them
-  consistent and fast
 
 ## 📦 Everything Else
 

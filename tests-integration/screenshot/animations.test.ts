@@ -29,12 +29,14 @@ class Pointer {
 
   constructor(private readonly workbox: Page) {}
 
-  async install(x: number, y: number) {
+  async install(x: number, y: number, moveMouse = true) {
     this.x = x;
     this.y = y;
     await this.workbox.evaluate(
       ({ x, y }) => {
-        const style = document.createElement("style");
+        // VS Code only allows creating elements of auxiliary windows in the main window.
+        const factory = (window.opener as Window | null)?.document ?? document;
+        const style = factory.createElement("style");
         style.textContent = `
           #demo-pointer { position: fixed; z-index: 1000000; pointer-events: none; width: 22px; height: 22px;
             margin: -2px 0 0 -3px; filter: drop-shadow(0 1px 2px rgba(0,0,0,.6)); }
@@ -48,17 +50,17 @@ class Pointer {
             font: 600 13px system-ui, sans-serif; box-shadow: 0 2px 6px rgba(0,0,0,.5); }
         `;
         document.head.appendChild(style);
-        const ripple = document.createElement("div");
+        const ripple = factory.createElement("div");
         ripple.id = "demo-pointer-ripple";
         document.body.appendChild(ripple);
-        const pointer = document.createElement("div");
+        const pointer = factory.createElement("div");
         pointer.id = "demo-pointer";
         const svgNs = "http://www.w3.org/2000/svg";
-        const svg = document.createElementNS(svgNs, "svg");
+        const svg = factory.createElementNS(svgNs, "svg");
         svg.setAttribute("viewBox", "0 0 22 22");
         svg.setAttribute("width", "22");
         svg.setAttribute("height", "22");
-        const arrow = document.createElementNS(svgNs, "path");
+        const arrow = factory.createElementNS(svgNs, "path");
         arrow.setAttribute("d", "M3 2 L3 18 L7.2 14 L10 20.5 L12.8 19.3 L10.1 13 L16 13 Z");
         arrow.setAttribute("fill", "white");
         arrow.setAttribute("stroke", "black");
@@ -67,7 +69,7 @@ class Pointer {
         svg.appendChild(arrow);
         pointer.appendChild(svg);
         document.body.appendChild(pointer);
-        const keys = document.createElement("div");
+        const keys = factory.createElement("div");
         keys.id = "demo-keys";
         document.body.appendChild(keys);
         pointer.style.left = `${x}px`;
@@ -75,7 +77,9 @@ class Pointer {
       },
       { x, y },
     );
-    await this.workbox.mouse.move(x, y);
+    if (moveMouse) {
+      await this.workbox.mouse.move(x, y);
+    }
   }
 
   position() {
@@ -170,6 +174,35 @@ class Pointer {
     await this.workbox.evaluate(() => {
       document.getElementById("demo-pointer")!.style.display = "none";
     });
+  }
+
+  async show(x: number, y: number) {
+    await this.workbox.evaluate(() => {
+      document.getElementById("demo-pointer")!.style.display = "block";
+    });
+    await this.place(x, y);
+  }
+
+  /** Moves only the drawn pointer, for drags whose events are dispatched by hand. */
+  async glideTo(x: number, y: number, duration = 600) {
+    const startX = this.x;
+    const startY = this.y;
+    const steps = Math.max(1, Math.round(duration / 25));
+    for (let i = 1; i <= steps; i++) {
+      const t = i / steps;
+      const ease = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+      this.x = startX + (x - startX) * ease;
+      this.y = startY + (y - startY) * ease;
+      await this.workbox.evaluate(
+        ({ x, y }) => {
+          const pointer = document.getElementById("demo-pointer")!;
+          pointer.style.left = `${x}px`;
+          pointer.style.top = `${y}px`;
+        },
+        { x: this.x, y: this.y },
+      );
+      await this.workbox.waitForTimeout(10);
+    }
   }
 }
 
@@ -298,13 +331,29 @@ async function graphClip(workbox: Page, height: number): Promise<Rect> {
 }
 
 /** A small web app history used by all demos. Returns the change IDs by description. */
-async function initializeDemoRepo(testRepo: TestRepo) {
+const LOGIN_LINES = [
+  'import { openSession } from "./session";',
+  "",
+  "export function lgoin(user: string, password: string) {",
+  "  const session = openSession(user, password);",
+  "  return session;",
+  "}",
+  "",
+  "export function logout() {",
+  "  closeSession();",
+  "}",
+];
+
+async function initializeDemoRepo(testRepo: TestRepo, options: { hunks?: boolean } = {}) {
   await testRepo.writeFile("package.json", '{ "name": "webshop" }\n');
   await testRepo.writeFile("src/app.ts", "export function start() {}\n");
   await testRepo.writeFile("README.md", "# Webshop\n");
   const setup = await testRepo.commit("chore: Set up the project");
 
-  await testRepo.writeFile("src/auth/login.ts", "export function login() {}\n");
+  await testRepo.writeFile(
+    "src/auth/login.ts",
+    options.hunks ? `${LOGIN_LINES.join("\n")}\n` : "export function login() {}\n",
+  );
   await testRepo.writeFile("src/auth/session.ts", "export function openSession() {}\n");
   await testRepo.writeFile("src/ui/login-form.css", ".login {}\n");
   const login = await testRepo.commit("feat: Add the login form");
@@ -316,6 +365,12 @@ async function initializeDemoRepo(testRepo: TestRepo) {
 
   await testRepo.writeFile("src/auth/session.ts", "export function openSession() {}\nexport function refresh() {}\n");
   await testRepo.writeFile("tests/session.test.ts", "test('session', () => {});\n");
+  if (options.hunks) {
+    const lines = [...LOGIN_LINES];
+    lines[2] = "export function login(user: string, password: string) {";
+    lines.splice(5, 0, "  session.onExpired(() => session.refresh());");
+    await testRepo.writeFile("src/auth/login.ts", `${lines.join("\n")}\n`);
+  }
   const session = await testRepo.commit("feat: Refresh expired sessions");
 
   await testRepo.writeFile("docs/auth.md", "# Authentication\n");
@@ -420,6 +475,17 @@ async function drag(pointer: Pointer, workbox: Page, source: Locator, target: Lo
   await workbox.waitForTimeout(500);
 }
 
+/** Moves the pointer onto a menu item in the graph and clicks it. */
+async function chooseMenuItem(pointer: Pointer, workbox: Page, graphFrame: Frame, menu: string, action: string) {
+  const item = graphFrame.locator(`${menu} [data-action="${action}"]`);
+  await expect(item).toBeVisible();
+  await workbox.waitForTimeout(500);
+  await pointer.moveToLocator(item, { x: 30 }, 500);
+  await workbox.waitForTimeout(400);
+  await pointer.click();
+  await expect(graphFrame.locator(menu)).not.toBeVisible();
+}
+
 test("record dragging changed files", async ({
   electronApp,
   userDataDir,
@@ -467,6 +533,7 @@ test("record dragging changed files", async ({
   await pointer.up();
   await workbox.keyboard.up(mod);
   await pointer.showKeys(null);
+  await chooseMenuItem(pointer, workbox, graphFrame, "#edge-drop-menu", "moveToNewChange");
   let newChange = "";
   await expect(async () => {
     const entries = await testRepo.log();
@@ -515,6 +582,7 @@ test("record inserting changes", async ({ electronApp, userDataDir, graphFrame, 
   await pointer.up();
   await workbox.keyboard.up(mod);
   await pointer.showKeys(null);
+  await chooseMenuItem(pointer, workbox, graphFrame, "#edge-drop-menu", "rebase");
   await expect(async () => {
     const entries = await testRepo.log();
     expect(entries.find((e) => e.change_id === ids.session)!.parents.map((p) => p.change_id)).toEqual([ids.login]);
@@ -589,4 +657,296 @@ test("record graph in tab", async ({ electronApp, userDataDir, graphFrame, testR
 
   await recorder.stop();
   toGif(recorder.videoPath, "graph-in-tab.gif", clip, 0.8, 1000);
+});
+
+function hunkRows(graphFrame: Frame, changeId: string, filePath: string) {
+  return graphFrame.locator(`#nodes > [data-role="file-hunk"][data-hunk-of^="${changeId}/"][data-path="${filePath}"]`);
+}
+
+test("record moving hunks", async ({ electronApp, userDataDir, graphFrame, testRepo, workbox, xvfbDisplay }) => {
+  await prepareWorkbench(electronApp, userDataDir, workbox);
+  const ids = await initializeDemoRepo(testRepo, { hunks: true });
+  await widenSideBar(workbox, 120);
+  await expect(graphFrame.locator("#nodes > div[data-change-id]")).toHaveCount(7);
+  await changeRow(graphFrame, ids.login).locator('[data-role="files-toggle"]').click();
+  await expect(fileRow(graphFrame, ids.login, "src/auth/login.ts")).toBeVisible();
+
+  const pointer = new Pointer(workbox);
+  const sideBar = (await workbox.locator(".part.sidebar").boundingBox())!;
+  await pointer.install(sideBar.x + sideBar.width - 40, sideBar.y + 440);
+  const clip = await graphClip(workbox, 420);
+
+  const recorder = new Recorder(xvfbDisplay, "hunks");
+  await recorder.start();
+  await workbox.waitForTimeout(1000);
+
+  await pointer.moveToLocator(changeRow(graphFrame, ids.session).locator('[data-role="files-toggle"]'));
+  await pointer.click();
+  const loginFile = fileRow(graphFrame, ids.session, "src/auth/login.ts");
+  await expect(loginFile).toBeVisible();
+  await workbox.waitForTimeout(800);
+
+  await pointer.moveToLocator(loginFile.locator('[data-role="hunks-toggle"]'), undefined, 500);
+  await pointer.click();
+  const hunks = hunkRows(graphFrame, ids.session, "src/auth/login.ts");
+  await expect(hunks).toHaveCount(2);
+  await workbox.waitForTimeout(1500);
+
+  // The typo fix belongs to the login form, so move just that hunk there.
+  await drag(pointer, workbox, hunks.first(), changeRow(graphFrame, ids.login));
+  await pointer.up();
+  await chooseMenuItem(pointer, workbox, graphFrame, "#hunk-drop-menu", "moveHunks");
+  await expect(hunks).toHaveCount(1);
+  await expect(async () => {
+    const login = (await testRepo.jjCommand(["file", "show", "-r", ids.login, "src/auth/login.ts"])).stdout.toString();
+    expect(login).toContain("export function login(");
+  }).toPass();
+  await pointer.moveTo(sideBar.x + sideBar.width - 40, sideBar.y + 470, 500);
+  await workbox.waitForTimeout(2000);
+
+  await recorder.stop();
+  toGif(recorder.videoPath, "moving-hunks.gif", clip, 0.8);
+});
+
+test("record change hover actions", async ({
+  electronApp,
+  userDataDir,
+  graphFrame,
+  testRepo,
+  workbox,
+  xvfbDisplay,
+}) => {
+  await prepareWorkbench(electronApp, userDataDir, workbox, { width: 1100, height: 640 });
+  const ids = await initializeDemoRepo(testRepo);
+  await widenSideBar(workbox, 150);
+  await expect(graphFrame.locator("#nodes > div[data-change-id]")).toHaveCount(7);
+
+  const pointer = new Pointer(workbox);
+  const editor = (await workbox.locator(".part.editor").boundingBox())!;
+  await pointer.install(editor.x + editor.width / 2, editor.y + editor.height / 2);
+  const window = await workbox.locator(".monaco-workbench").boundingBox();
+  const clip = await deviceRect(workbox, window!);
+
+  const recorder = new Recorder(xvfbDisplay, "hover-actions");
+  await recorder.start();
+  await workbox.waitForTimeout(1000);
+
+  const cartRow = changeRow(graphFrame, ids.cart);
+  await pointer.moveToLocator(cartRow, { x: 200 }, 800);
+  await workbox.waitForTimeout(400);
+  await pointer.moveToLocator(cartRow.locator('[data-role="edit-description"]'), undefined, 400);
+  await workbox.waitForTimeout(300);
+  await pointer.click();
+  const input = workbox.locator(".quick-input-widget input").first();
+  await expect(input).toHaveValue("feat: Add a shopping cart");
+  await workbox.waitForTimeout(500);
+  await workbox.keyboard.press("End");
+  await workbox.keyboard.type(" with pricing", { delay: 70 });
+  await workbox.waitForTimeout(400);
+  await workbox.keyboard.press("Enter");
+  await expect(graphFrame.getByText("feat: Add a shopping cart with pricing")).toBeVisible();
+  await workbox.waitForTimeout(1200);
+
+  const loginRow = changeRow(graphFrame, ids.login);
+  await pointer.moveToLocator(loginRow, { x: 200 }, 700);
+  await workbox.waitForTimeout(400);
+  const eye = loginRow.locator('[data-role="toggle-descendants"]');
+  await pointer.moveToLocator(eye, undefined, 400);
+  await workbox.waitForTimeout(300);
+  await pointer.click();
+  await expect(graphFrame.getByText("feat: Refresh expired sessions")).toBeHidden();
+  await pointer.moveTo(pointer.position().x - 150, pointer.position().y + 60, 500);
+  await workbox.waitForTimeout(1800);
+
+  const pressedEye = graphFrame.locator('[data-role="toggle-descendants"][aria-pressed="true"]');
+  await pointer.moveToLocator(loginRow, { x: 200 }, 500);
+  await pointer.moveToLocator(pressedEye, undefined, 400);
+  await workbox.waitForTimeout(300);
+  await pointer.click();
+  await expect(graphFrame.getByText("feat: Refresh expired sessions")).toBeVisible();
+  await pointer.moveTo(editor.x + editor.width / 2, editor.y + editor.height / 2, 700);
+  await workbox.waitForTimeout(1500);
+
+  await recorder.stop();
+  toGif(recorder.videoPath, "change-hover-actions.gif", clip, 0.8, 1000);
+});
+
+test("record resolving conflicts", async ({ electronApp, userDataDir, graphFrame, testRepo, workbox, xvfbDisplay }) => {
+  await prepareWorkbench(electronApp, userDataDir, workbox, { width: 1200, height: 700 });
+  await widenSideBar(workbox, 60);
+
+  await testRepo.writeFile("src/config.ts", 'export const theme = "light";\n');
+  const base = await testRepo.commit("chore: Add the config");
+  await testRepo.writeFile("src/config.ts", 'export const theme = "dark";\n');
+  const dark = await testRepo.commit("feat: Default to the dark theme");
+  await testRepo.jjCommand(["new", base]);
+  await testRepo.writeFile("src/config.ts", 'export const theme = "system";\n');
+  const system = await testRepo.commit("feat: Follow the system theme");
+  await testRepo.jjCommand(["new", dark, system, "-m", "merge: Combine the theme changes"]);
+  const merge = (await testRepo.log("@"))[0].change_id;
+  await testRepo.jjCommand(["new"]);
+  await testRepo.writeFile("README.md", "# Themes\n");
+  await testRepo.commit("docs: Document the themes");
+  const mergeRow = changeRow(graphFrame, merge);
+  await expect(mergeRow).toHaveAttribute("data-conflicted", "");
+
+  const pointer = new Pointer(workbox);
+  const editor = (await workbox.locator(".part.editor").boundingBox())!;
+  await pointer.install(editor.x + editor.width / 2, editor.y + editor.height / 2);
+  const window = await workbox.locator(".monaco-workbench").boundingBox();
+  const clip = await deviceRect(workbox, window!);
+
+  const recorder = new Recorder(xvfbDisplay, "conflicts");
+  await recorder.start();
+  await workbox.waitForTimeout(1200);
+
+  await pointer.moveToLocator(mergeRow.locator('[data-role="files-toggle"]'), undefined, 900);
+  await pointer.click();
+  const conflictFile = fileRow(graphFrame, merge, "src/config.ts");
+  await expect(conflictFile).toHaveAttribute("data-conflict", "");
+  await workbox.waitForTimeout(700);
+  await pointer.moveToLocator(conflictFile, { x: 80 }, 400);
+  await pointer.dblclick();
+
+  const output = workbox.locator('.monaco-editor[role="code"][data-uri*="output_config.ts"]');
+  await expect(output).toBeVisible();
+  await workbox.waitForTimeout(1500);
+  await pointer.moveToLocator(output.locator(".view-line").first(), { x: 120 }, 700);
+  await pointer.click();
+  await workbox.keyboard.press(`${mod}+a`);
+  await workbox.keyboard.type('export const theme = "system"; // falls back to "dark"', { delay: 35 });
+  await workbox.waitForTimeout(500);
+  await pointer.showKeys("Ctrl+S");
+  await workbox.keyboard.press(`${mod}+s`);
+  await expect(workbox.locator(".tab.active")).not.toHaveClass(/dirty/);
+  await workbox.waitForTimeout(600);
+  await pointer.showKeys("Ctrl+W");
+  await workbox.keyboard.press(`${mod}+w`);
+  await pointer.showKeys(null);
+  await expect(output).toBeHidden();
+  await expect(mergeRow).not.toHaveAttribute("data-conflicted");
+  await pointer.moveTo(editor.x + editor.width / 2, editor.y + editor.height / 2, 600);
+  await workbox.waitForTimeout(2000);
+
+  await recorder.stop();
+  toGif(recorder.videoPath, "resolving-conflicts.gif", clip, 0.8, 1000);
+});
+
+async function dispatchDrag(target: Locator, type: string, data = "") {
+  await target.evaluate(
+    (el, { type, data }) => {
+      const rect = el.getBoundingClientRect();
+      const dataTransfer = new DataTransfer();
+      if (data) {
+        dataTransfer.setData("text/plain", data);
+      }
+      el.dispatchEvent(
+        new DragEvent(type, {
+          bubbles: true,
+          cancelable: true,
+          shiftKey: true,
+          dataTransfer,
+          clientX: rect.left + 140,
+          clientY: rect.top + rect.height / 2,
+        }),
+      );
+    },
+    { type, data },
+  );
+}
+
+test("record graph windows", async ({
+  electronApp,
+  userDataDir,
+  scmView,
+  graphFrame,
+  testRepo,
+  workbox,
+  xvfbDisplay,
+}) => {
+  const main = { width: 1000, height: 760 };
+  await prepareWorkbench(electronApp, userDataDir, workbox, main);
+  const ids = await initializeDemoRepo(testRepo);
+  await widenSideBar(workbox, 100);
+  await expect(graphFrame.locator("#nodes > div[data-change-id]")).toHaveCount(7);
+  await changeRow(graphFrame, ids.login).locator('[data-role="files-toggle"]').click();
+  const sessionFile = fileRow(graphFrame, ids.login, "src/auth/session.ts");
+  await expect(sessionFile).toBeVisible();
+
+  const pointer = new Pointer(workbox);
+  const editor = (await workbox.locator(".part.editor").boundingBox())!;
+  await pointer.install(editor.x + editor.width / 2, editor.y + editor.height / 2);
+  const ratio = await workbox.evaluate(() => window.devicePixelRatio);
+
+  const recorder = new Recorder(xvfbDisplay, "graph-windows");
+  await recorder.start();
+  await workbox.waitForTimeout(1000);
+
+  const graphHeader = scmView.locator(".pane-header", { hasText: "JJ Graph" }).first();
+  await pointer.moveToLocator(graphHeader, { x: 60 }, 700);
+  const openInWindow = graphHeader.getByRole("button", { name: "Open Graph in Window" });
+  await pointer.moveToLocator(openInWindow, undefined, 600);
+  await workbox.waitForTimeout(300);
+  const newWindowPromise = electronApp.waitForEvent("window");
+  await pointer.click();
+  const graphWindow = await newWindowPromise;
+  type Electron = { BrowserWindow: { getAllWindows(): { id: number; setBounds(bounds: Rect): void }[] } };
+  await electronApp.evaluate(({ BrowserWindow }: Electron, main) => {
+    const windows = BrowserWindow.getAllWindows().sort((a, b) => a.id - b.id);
+    windows[windows.length - 1].setBounds({ x: main.width, y: 0, width: 700, height: main.height });
+  }, main);
+  const windowFrame = await findTabGraphFrame(graphWindow, graphFrame);
+  await workbox.mouse.move(editor.x + editor.width / 2, editor.y + 80);
+  await workbox.keyboard.press("Escape");
+  await expect(windowFrame.locator("#nodes > div[data-change-id]")).toHaveCount(7);
+  await pointer.moveTo(editor.x + editor.width / 2, editor.y + 80, 600);
+  await workbox.waitForTimeout(1500);
+
+  // Drag a changed file from the side bar graph onto a change in the graph window.
+  await pointer.moveToLocator(sessionFile, undefined, 900);
+  await workbox.waitForTimeout(300);
+  await pointer.ripple();
+  const data = await sessionFile.evaluate((el) => {
+    const dataTransfer = new DataTransfer();
+    el.dispatchEvent(new DragEvent("dragstart", { bubbles: true, cancelable: true, dataTransfer }));
+    return dataTransfer.getData("text/plain");
+  });
+  const exitY = pointer.position().y;
+  await pointer.glideTo(main.width / ratio, exitY - 40, 700);
+  await pointer.hide();
+
+  const windowPointer = new Pointer(graphWindow);
+  const windowRatio = await graphWindow.evaluate(() => window.devicePixelRatio);
+  // A mouse move without a pressed button would end the relayed drag.
+  await windowPointer.install(0, (exitY - 40) * (ratio / windowRatio), false);
+  await windowPointer.showKeys("Shift");
+  const target = changeRow(windowFrame, ids.session);
+  const targetBox = (await target.boundingBox())!;
+  await windowPointer.glideTo(targetBox.x + 140, targetBox.y + targetBox.height / 2, 800);
+  await expect(async () => {
+    await dispatchDrag(target, "dragenter");
+    await dispatchDrag(target, "dragover");
+    expect(await target.evaluate((el) => getComputedStyle(el).outlineStyle)).toBe("solid");
+  }).toPass();
+  await graphWindow.waitForTimeout(700);
+  await dispatchDrag(target, "drop", data);
+  await windowPointer.showKeys(null);
+  await sessionFile.evaluate((el) => {
+    el.dispatchEvent(new DragEvent("dragend", { bubbles: true, dataTransfer: new DataTransfer() }));
+  });
+  await expect(sessionFile).toHaveCount(0);
+  await windowPointer.glideTo(targetBox.x + 250, targetBox.y + 120, 500);
+  await windowPointer.moveToLocator(target.locator('[data-role="files-toggle"]'), undefined, 600);
+  await windowPointer.click();
+  await expect(fileRow(windowFrame, ids.session, "src/auth/session.ts")).toBeVisible();
+  await graphWindow.waitForTimeout(2200);
+
+  await recorder.stop();
+  toGif(
+    recorder.videoPath,
+    "graph-windows.gif",
+    { x: 0, y: 0, width: main.width + 700, height: main.height },
+    0.8,
+    1200,
+  );
 });
